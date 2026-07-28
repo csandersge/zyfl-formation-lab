@@ -130,9 +130,14 @@ export default function Home() {
       {tab === "play" && (
         <section className="play-page">
           <div className="play-heading">
-            <div>
+            <div className="play-call">
               <p className="eyebrow">Coach&apos;s call</p>
               <h1>{formation}!</h1>
+            </div>
+            <div className={`feedback ${answered ? "visible" : ""} ${answered && isCorrect ? "success" : "try-again"}`} aria-live="polite">
+              <span className="feedback-icon">{answered ? (isCorrect ? "✓" : "!") : "Y"}</span>
+              <div><b>{answered ? (isCorrect ? "Great alignment!" : "Not quite—study the blue Y.") : "You’re up!"}</b><p>{boardStatus}</p></div>
+              {answered && <button className="primary-button" onClick={nextPlay}>Next Play <span>→</span></button>}
             </div>
             <div className="challenge-chip"><span>Y</span> Find Y&apos;s spot</div>
           </div>
@@ -170,11 +175,6 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={`feedback ${answered ? "visible" : ""} ${answered && isCorrect ? "success" : "try-again"}`} aria-live="polite">
-            <span className="feedback-icon">{answered ? (isCorrect ? "✓" : "!") : "Y"}</span>
-            <div><b>{answered ? (isCorrect ? "Great alignment!" : "Not quite—study the blue Y.") : "You’re up!"}</b><p>{boardStatus}</p></div>
-            {answered && <button className="primary-button" onClick={nextPlay}>Next Play <span>→</span></button>}
-          </div>
         </section>
       )}
 
