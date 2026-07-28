@@ -39,9 +39,9 @@ h1, h2, p { margin-top: 0; }
 .board-wrap::before { content: ""; position: absolute; inset: 0; opacity: .16; background: repeating-linear-gradient(90deg, transparent 0 5.2%, white 5.2% 5.35%), repeating-linear-gradient(0deg, transparent 0 24.7%, white 24.7% 25%); pointer-events: none; }
 .board-wrap.board-correct { animation: glow .55s ease; }
 @keyframes glow { 50% { box-shadow: 0 0 0 5px rgba(32,211,120,.45), 0 22px 60px rgba(0,0,0,.3); } }
-.landmarks, .formation-board { display: grid; grid-template-columns: repeat(19, minmax(0, 1fr)); }
+.landmarks, .formation-board { display: grid; grid-template-columns: repeat(21, minmax(0, 1fr)); }
 .landmarks { position: relative; height: 42px; align-items: center; color: rgba(255,255,255,.9); text-align: center; font-size: clamp(12px, 2vw, 20px); }
-.formation-board { position: relative; grid-template-rows: repeat(4, minmax(58px, 1fr)); aspect-ratio: 19 / 5.8; min-height: 270px; border: 2px solid rgba(255,255,255,.28); border-radius: 16px; overflow: hidden; }
+.formation-board { position: relative; grid-template-rows: repeat(4, minmax(58px, 1fr)); aspect-ratio: 21 / 5.8; min-height: 270px; border: 2px solid rgba(255,255,255,.28); border-radius: 16px; overflow: hidden; }
 .line-of-scrimmage { grid-column: 1 / -1; grid-row: 1; align-self: center; border-top: 2px solid rgba(255,255,255,.45); z-index: 0; }
 .target, .player { align-self: center; justify-self: center; position: relative; z-index: 2; }
 .target { width: 68%; aspect-ratio: .68; max-height: 62px; border: 2px solid rgba(255,255,255,.68); background: rgba(255,255,255,.035); border-radius: 8px; cursor: pointer; padding: 0; display: grid; place-items: center; transition: transform .16s, border-color .16s, background .16s; }
