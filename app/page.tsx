@@ -8,31 +8,31 @@ type Cell = `${number}-${number}`;
 type HelmetId = "basic" | "stripe" | "wing" | "lightning";
 
 const FORMATIONS: Record<FormationName, { cell: Cell; explanation: string; short: string }> = {
-  Right: { cell: "1-18", explanation: "Right: Y lines up as a TE to the right.", short: "TE right" },
-  Left: { cell: "1-6", explanation: "Left: Y lines up as a TE to the left.", short: "TE left" },
-  Rip: { cell: "2-17", explanation: "Rip: Y lines up as a wing back to the right on the outside hip of the tackle.", short: "Wing right" },
+  Right: { cell: "1-13", explanation: "Right: Y lines up as a TE to the right.", short: "TE right" },
+  Left: { cell: "1-7", explanation: "Left: Y lines up as a TE to the left.", short: "TE left" },
+  Rip: { cell: "2-13", explanation: "Rip: Y lines up as a wing back to the right on the outside hip of the tackle.", short: "Wing right" },
   Liz: { cell: "2-7", explanation: "Liz: Y lines up as a wing back to the left on the outside hip of the tackle.", short: "Wing left" },
-  Rock: { cell: "2-20", explanation: "Rock: Y lines up as slot receiver to the right.", short: "Slot right" },
+  Rock: { cell: "2-16", explanation: "Rock: Y lines up as slot receiver to the right.", short: "Slot right" },
   Lex: { cell: "2-4", explanation: "Lex: Y lines up as slot receiver to the left.", short: "Slot left" },
 };
 
 const FORMATION_NAMES = Object.keys(FORMATIONS) as FormationName[];
 const SELECTABLE: Cell[] = [
-  "1-2", "1-4", "1-6", "1-18", "1-20", "1-21",
-  "2-4", "2-7", "2-17", "2-20",
-  "4-10", "4-14",
+  "1-2", "1-4", "1-7", "1-13", "1-16", "1-18",
+  "2-4", "2-7", "2-13", "2-16",
+  "6-8", "6-12",
 ];
 const LANDMARKS = [
-  { label: "9", col: 1 }, { label: "7", col: 4 }, { label: "5", col: 7 },
-  { label: "3", col: 9 }, { label: "1", col: 11 }, { label: "0", col: 13 },
-  { label: "2", col: 15 }, { label: "4", col: 17 }, { label: "6", col: 19 },
-  { label: "8", col: 21 },
+  { label: "9", after: 2 }, { label: "7", after: 6 }, { label: "5", after: 7 },
+  { label: "3", after: 8 }, { label: "1", after: 9 }, { label: "0", after: 10 },
+  { label: "2", after: 11 }, { label: "4", after: 12 }, { label: "6", after: 13 },
+  { label: "8", after: 17 },
 ];
 const FIXED = [
-  { label: "LT", row: 1, col: 8 }, { label: "LG", row: 1, col: 10 },
-  { label: "C", row: 1, col: 12 }, { label: "RG", row: 1, col: 14 },
-  { label: "RT", row: 1, col: 16 }, { label: "QB", row: 3, col: 12 },
-  { label: "F", row: 4, col: 12 },
+  { label: "LT", row: 1, col: 8 }, { label: "LG", row: 1, col: 9 },
+  { label: "C", row: 1, col: 10 }, { label: "RG", row: 1, col: 11 },
+  { label: "RT", row: 1, col: 12 }, { label: "QB", row: 4, col: 10 },
+  { label: "F", row: 6, col: 10 },
 ];
 const HELMETS: { id: HelmetId; name: string; cost: number }[] = [
   { id: "basic", name: "Basic", cost: 0 },
@@ -139,7 +139,9 @@ export default function Home() {
 
           <div className={`board-wrap ${answered && isCorrect ? "board-correct" : ""}`}>
             <div className="landmarks" aria-hidden="true">
-              {LANDMARKS.map((mark) => <b key={mark.label} style={{ gridColumn: mark.col }}>{mark.label}</b>)}
+              {LANDMARKS.map((mark) => (
+                <b key={mark.label} style={{ gridColumn: mark.after, justifySelf: "end" }}>{mark.label}</b>
+              ))}
             </div>
             <div className="formation-board" aria-label={`Formation board for ${formation}`}>
               <div className="line-of-scrimmage" />
