@@ -20,16 +20,31 @@ type Cell = `${number}-${number}`;
 type Mastery = Record<FormationName, number>;
 type CardKey = "phase1" | "phase2" | "phase3" | "phase4";
 type CardState = Record<CardKey, boolean>;
+type SpecialPlayType = "power" | "sweep" | "qb-keep" | "reverse" | "empty-sweep" | null;
+type ApprovedRunPlay = {
+  id: string;
+  displayCall: string;
+  formation: "Left" | "Right" | "Rip";
+  hModifier: HModifier;
+  displayedRunNumber: string;
+  carrier: BallCarrier;
+  runLocationDigit: LocationDigit;
+  concept: string;
+  specialType: SpecialPlayType;
+  activePhase4: boolean;
+  activePhase5: boolean;
+};
 
 const FORMATION_NAMES: FormationName[] = ["Right", "Rip", "Rock", "Left", "Liz", "Lex"];
+const APPROVED_RUN_FORMATIONS: FormationName[] = ["Right", "Left", "Rip"];
 const EMPTY_MASTERY: Mastery = { Right: 0, Rip: 0, Rock: 0, Left: 0, Liz: 0, Lex: 0 };
 const EMPTY_CARD_STATE: CardState = { phase1: false, phase2: false, phase3: false, phase4: false };
 const H_MODIFIERS: HModifier[] = ["A", "B", "C", "D", "1", "2", "3", "4"];
 const CARRIER_DIGITS: CarrierDigit[] = ["1", "2", "4", "5", "6", "7"];
 const LOCATION_DIGITS: LocationDigit[] = ["0", "1", "4", "5", "6", "7", "8", "9"];
 const BALL_CARRIERS: BallCarrier[] = ["QB", "F", "H", "Y", "X", "Z"];
-const BALL_CARRIER_MAP: Record<CarrierDigit, BallCarrier> = {
-  "1": "QB", "2": "F", "4": "H", "5": "Y", "6": "X", "7": "Z",
+const CARRIER_DIGIT_FOR_PLAYER: Record<BallCarrier, CarrierDigit> = {
+  QB: "1", F: "2", H: "4", Y: "5", X: "6", Z: "7",
 };
 const RUN_LOCATION_MAP: Record<LocationDigit, { concept: string; side: "Right" | "Left" }> = {
   "0": { concept: "Inside Zone", side: "Right" },
@@ -41,6 +56,31 @@ const RUN_LOCATION_MAP: Record<LocationDigit, { concept: string; side: "Right" |
   "8": { concept: "Outside Zone", side: "Right" },
   "9": { concept: "Outside Zone", side: "Left" },
 };
+const APPROVED_RUN_PLAYS: ApprovedRunPlay[] = [
+  { id: "left-3-20", displayCall: "Left 3 20", formation: "Left", hModifier: "3", displayedRunNumber: "20", carrier: "F", runLocationDigit: "0", concept: "Inside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "left-4-11", displayCall: "Left 4 11", formation: "Left", hModifier: "4", displayedRunNumber: "11", carrier: "QB", runLocationDigit: "1", concept: "Inside Zone Left", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "left-4-21", displayCall: "Left 4 21", formation: "Left", hModifier: "4", displayedRunNumber: "21", carrier: "F", runLocationDigit: "1", concept: "Inside Zone Left", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "left-a-25-power", displayCall: "Left A 25 Power", formation: "Left", hModifier: "A", displayedRunNumber: "25", carrier: "F", runLocationDigit: "5", concept: "Power Left", specialType: "power", activePhase4: true, activePhase5: true },
+  { id: "left-c-21", displayCall: "Left C 21", formation: "Left", hModifier: "C", displayedRunNumber: "21", carrier: "F", runLocationDigit: "1", concept: "Inside Zone Left", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "left-c-fake-21-qb-keep-right", displayCall: "Left C Fake 21 QB Keep Right", formation: "Left", hModifier: "C", displayedRunNumber: "21", carrier: "QB", runLocationDigit: "1", concept: "Inside Zone Left", specialType: "qb-keep", activePhase4: true, activePhase5: true },
+  { id: "left-d-29-sweep", displayCall: "Left D 29 Sweep", formation: "Left", hModifier: "D", displayedRunNumber: "29", carrier: "F", runLocationDigit: "9", concept: "Outside Zone Left", specialType: "sweep", activePhase4: true, activePhase5: true },
+
+  { id: "right-3-21", displayCall: "Right 3 21", formation: "Right", hModifier: "3", displayedRunNumber: "21", carrier: "F", runLocationDigit: "1", concept: "Inside Zone Left", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "right-4-10", displayCall: "Right 4 10", formation: "Right", hModifier: "4", displayedRunNumber: "10", carrier: "QB", runLocationDigit: "0", concept: "Inside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "right-4-20", displayCall: "Right 4 20", formation: "Right", hModifier: "4", displayedRunNumber: "20", carrier: "F", runLocationDigit: "0", concept: "Inside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "right-a-24-power", displayCall: "Right A 24 Power", formation: "Right", hModifier: "A", displayedRunNumber: "24", carrier: "F", runLocationDigit: "4", concept: "Power Right", specialType: "power", activePhase4: true, activePhase5: true },
+  { id: "right-b-20", displayCall: "Right B 20", formation: "Right", hModifier: "B", displayedRunNumber: "20", carrier: "F", runLocationDigit: "0", concept: "Inside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "right-c-10", displayCall: "Right C 10", formation: "Right", hModifier: "C", displayedRunNumber: "10", carrier: "QB", runLocationDigit: "0", concept: "Inside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "right-c-20", displayCall: "Right C 20", formation: "Right", hModifier: "C", displayedRunNumber: "20", carrier: "F", runLocationDigit: "0", concept: "Inside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "right-c-empty-18-sweep", displayCall: "Right C Empty 18 Sweep", formation: "Right", hModifier: "C", displayedRunNumber: "18", carrier: "QB", runLocationDigit: "8", concept: "Outside Zone Right", specialType: "empty-sweep", activePhase4: true, activePhase5: true },
+  { id: "right-c-fake-20-qb-keep-left", displayCall: "Right C Fake 20 QB Keep Left", formation: "Right", hModifier: "C", displayedRunNumber: "20", carrier: "QB", runLocationDigit: "0", concept: "Inside Zone Right", specialType: "qb-keep", activePhase4: true, activePhase5: true },
+  { id: "right-d-28-sweep", displayCall: "Right D 28 Sweep", formation: "Right", hModifier: "D", displayedRunNumber: "28", carrier: "F", runLocationDigit: "8", concept: "Outside Zone Right", specialType: "sweep", activePhase4: true, activePhase5: true },
+
+  { id: "rip-1-44", displayCall: "Rip 1 44", formation: "Rip", hModifier: "1", displayedRunNumber: "44", carrier: "H", runLocationDigit: "4", concept: "Power Right", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "rip-3-20", displayCall: "Rip 3 20", formation: "Rip", hModifier: "3", displayedRunNumber: "20", carrier: "F", runLocationDigit: "0", concept: "Inside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "rip-3-28", displayCall: "Rip 3 28", formation: "Rip", hModifier: "3", displayedRunNumber: "28", carrier: "F", runLocationDigit: "8", concept: "Outside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
+  { id: "rip-3-48-reverse-right", displayCall: "Rip 3 48 Reverse Right", formation: "Rip", hModifier: "3", displayedRunNumber: "48", carrier: "H", runLocationDigit: "8", concept: "Outside Zone Right", specialType: "reverse", activePhase4: true, activePhase5: true },
+];
 const EMPTY_H_HISTORY: HHistory = Object.fromEntries(
   H_MODIFIERS.map((modifier) => [modifier, { correct: 0, incorrect: 0 }]),
 ) as HHistory;
@@ -99,7 +139,6 @@ const FORMATIONS: Record<FormationName, {
 const SELECTABLE: Cell[] = [
   "1-2", "1-4", "1-7", "1-13", "1-16", "1-18",
   "2-2", "2-4", "2-7", "2-13", "2-16", "2-18",
-  "6-8", "6-12",
 ];
 const LANDMARKS = [
   { label: "9", after: 2 }, { label: "7", after: 6 }, { label: "5", after: 7 },
@@ -111,7 +150,6 @@ const FIXED = [
   { label: "LT", row: 1, col: 8 }, { label: "LG", row: 1, col: 9 },
   { label: "C", row: 1, col: 10 }, { label: "RG", row: 1, col: 11 },
   { label: "RT", row: 1, col: 12 }, { label: "QB", row: 4, col: 10 },
-  { label: "F", row: 6, col: 10 },
 ];
 const CARD_DATA: Record<CardKey, {
   phase: CardPhase;
@@ -190,6 +228,10 @@ function phaseMastered(mastery: Mastery) {
   return FORMATION_NAMES.every((name) => mastery[name] >= 5);
 }
 
+function runPhaseMastered(mastery: Mastery) {
+  return APPROVED_RUN_FORMATIONS.every((name) => mastery[name] >= 5);
+}
+
 function cardKeyForPhase(phase: CardPhase): CardKey {
   return `phase${phase}` as CardKey;
 }
@@ -239,28 +281,35 @@ function pickWeightedFormation(mastery: Mastery, previous?: FormationName, repea
   return pool[Math.floor(Math.random() * pool.length)] ?? "Right";
 }
 
-function pickWeightedCarrier(history: CarrierHistory, previous?: CarrierDigit, repeatCount = 0) {
-  const pool = CARRIER_DIGITS.flatMap((digit) => {
-    if (digit === previous && repeatCount >= 2) return [];
-    const item = history[digit];
-    const weight = Math.max(1, 4 + item.incorrect * 2 - Math.min(item.correct, 3));
-    return Array.from({ length: Math.min(weight, 18) }, () => digit);
-  });
-  return pool[Math.floor(Math.random() * pool.length)] ?? "2";
-}
+function pickApprovedRunPlay(
+  phase: 4 | 5,
+  mastery: Mastery,
+  carrierHistory: CarrierHistory,
+  locationHistory: LocationHistory,
+  previousPlayId?: string,
+  playRepeatCount = 0,
+  previousFormation?: FormationName,
+  formationRepeatCount = 0,
+) {
+  const eligible = APPROVED_RUN_PLAYS.filter((play) => phase === 4 ? play.activePhase4 : play.activePhase5);
+  let candidates = eligible.filter((play) => !(play.id === previousPlayId && playRepeatCount >= 2));
+  const withoutRepeatedFormation = candidates.filter(
+    (play) => !(play.formation === previousFormation && formationRepeatCount >= 2),
+  );
+  if (withoutRepeatedFormation.length) candidates = withoutRepeatedFormation;
 
-function pickWeightedLocation(history: LocationHistory, previous?: LocationDigit, repeatCount = 0) {
-  const pool = LOCATION_DIGITS.flatMap((digit) => {
-    if (digit === previous && repeatCount >= 2) return [];
-    const item = history[digit];
-    const weight = Math.max(1, 4 + item.incorrect * 2 - Math.min(item.correct, 3));
-    return Array.from({ length: Math.min(weight, 18) }, () => digit);
+  const pool = candidates.flatMap((play) => {
+    const carrierItem = carrierHistory[CARRIER_DIGIT_FOR_PLAYER[play.carrier]];
+    const locationItem = locationHistory[play.runLocationDigit];
+    const formationWeight = mastery[play.formation] >= 5 ? 1 : 6 - mastery[play.formation];
+    const carrierWeight = Math.max(1, 3 + carrierItem.incorrect * 2 - Math.min(carrierItem.correct, 2));
+    const locationWeight = phase === 5
+      ? Math.max(1, 3 + locationItem.incorrect * 2 - Math.min(locationItem.correct, 2))
+      : 1;
+    const weight = Math.min(24, formationWeight + carrierWeight + locationWeight);
+    return Array.from({ length: weight }, () => play);
   });
-  return pool[Math.floor(Math.random() * pool.length)] ?? "0";
-}
-
-function makeRunNumber(carrierDigit: CarrierDigit, locationDigit: LocationDigit) {
-  return `${carrierDigit}${locationDigit}`;
+  return pool[Math.floor(Math.random() * pool.length)] ?? eligible[0];
 }
 
 export default function Home() {
@@ -287,12 +336,10 @@ export default function Home() {
   const [phase5Unlocked, setPhase5Unlocked] = useState(false);
   const [hHistory, setHHistory] = useState<HHistory>(EMPTY_H_HISTORY);
   const [carrierHistory, setCarrierHistory] = useState<CarrierHistory>(EMPTY_CARRIER_HISTORY);
-  const [carrierDigit, setCarrierDigit] = useState<CarrierDigit>("2");
-  const [carrierRepeatCount, setCarrierRepeatCount] = useState(1);
   const [locationHistory, setLocationHistory] = useState<LocationHistory>(EMPTY_LOCATION_HISTORY);
-  const [locationDigit, setLocationDigit] = useState<LocationDigit>("0");
-  const [locationRepeatCount, setLocationRepeatCount] = useState(1);
-  const [runNumber, setRunNumber] = useState("20");
+  const [selectedRunPlay, setSelectedRunPlay] = useState<ApprovedRunPlay>(APPROVED_RUN_PLAYS[0]);
+  const [runPlayRepeatCount, setRunPlayRepeatCount] = useState(1);
+  const [runFormationRepeatCount, setRunFormationRepeatCount] = useState(1);
   const [quizOpen, setQuizOpen] = useState(false);
   const [quizAnswered, setQuizAnswered] = useState(false);
   const [quizChoice, setQuizChoice] = useState<BallCarrier | null>(null);
@@ -329,7 +376,7 @@ export default function Home() {
         phase1: phaseMastered(savedP1),
         phase2: phaseMastered(savedP2),
         phase3: phaseMastered(savedP3),
-        phase4: phaseMastered(savedP4),
+        phase4: runPhaseMastered(savedP4),
       };
       const migratedCards = Object.fromEntries(
         CARD_KEYS.map((key) => [key, masteryCards[key]]),
@@ -347,16 +394,12 @@ export default function Home() {
       setPhase2Unlocked(Boolean(saved.phase2Unlocked) || phaseMastered(savedP1));
       setPhase3Unlocked(Boolean(saved.phase3Unlocked) || phaseMastered(savedP2));
       setPhase4Unlocked(Boolean(saved.phase4Unlocked) || phaseMastered(savedP3));
-      setPhase5Unlocked(Boolean(saved.phase5Unlocked) || phaseMastered(savedP4));
+      setPhase5Unlocked(Boolean(saved.phase5Unlocked) || runPhaseMastered(savedP4));
       const firstUnseen = CARD_KEYS.find((key) => migratedCards[key] && !savedRevealSeen[key]);
       if (firstUnseen) setPendingReveal(firstUnseen);
       setFormation(pickWeightedFormation(savedP1));
       setHModifier(pickWeightedModifier(savedHHistory));
-      const nextCarrier = pickWeightedCarrier(savedCarrierHistory);
-      const nextLocation = pickWeightedLocation(savedLocationHistory);
-      setCarrierDigit(nextCarrier);
-      setLocationDigit(nextLocation);
-      setRunNumber(makeRunNumber(nextCarrier, nextLocation));
+      setSelectedRunPlay(pickApprovedRunPlay(4, savedP4, savedCarrierHistory, savedLocationHistory));
     } catch {
       setFormation(pickWeightedFormation(EMPTY_MASTERY));
     }
@@ -377,10 +420,10 @@ export default function Home() {
       phase3Mastered: phaseMastered(p3Mastery),
       phase4Unlocked,
       phase4Mastery: p4Mastery,
-      phase4Mastered: phaseMastered(p4Mastery),
+      phase4Mastered: runPhaseMastered(p4Mastery),
       phase5Unlocked,
       phase5Mastery: p5Mastery,
-      phase5Mastered: phaseMastered(p5Mastery),
+      phase5Mastered: runPhaseMastered(p5Mastery),
       hModifierHistory: hHistory,
       carrierDigitHistory: carrierHistory,
       runLocationHistory: locationHistory,
@@ -421,9 +464,11 @@ export default function Home() {
   const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : phase === 3 ? p3Mastery : phase === 4 ? p4Mastery : p5Mastery;
   const correctCell = currentPlayer === "H" ? null : FORMATIONS[formation].players[currentPlayer];
   const correctHSpot = getHSpot(formation, hModifier);
-  const ballCarrier = BALL_CARRIER_MAP[carrierDigit];
-  const runLocation = RUN_LOCATION_MAP[locationDigit];
-  const completeCall = `${formation} ${hModifier} ${runNumber}`;
+  const ballCarrier = selectedRunPlay.carrier;
+  const carrierHistoryDigit = CARRIER_DIGIT_FOR_PLAYER[ballCarrier];
+  const locationDigit = selectedRunPlay.runLocationDigit;
+  const runNumber = selectedRunPlay.displayedRunNumber;
+  const completeCall = selectedRunPlay.displayCall;
   const instruction = locationActive
     ? "Where is the runner going?"
     : phase === 1
@@ -436,8 +481,8 @@ export default function Home() {
   const boardStatus = useMemo(() => {
     if (phase === 5 && locationAnswered) {
       return resultCorrect
-        ? `Correct! The ${locationDigit} means ${runLocation.concept} ${runLocation.side}.`
-        : `Not quite. The second digit is ${locationDigit}, so the run goes to the ${locationDigit} landmark: ${runLocation.concept} ${runLocation.side}.`;
+        ? `Correct! The ${locationDigit} means ${selectedRunPlay.concept}.`
+        : `Not quite. The second digit is ${locationDigit}, so the run goes to the ${locationDigit} landmark: ${selectedRunPlay.concept}.`;
     }
     if (!answered) return instruction;
     if (resultCorrect) {
@@ -448,7 +493,7 @@ export default function Home() {
       return `Letters place H on the Y side. Numbers place H away from Y. ${formation} ${hModifier} places H at ${hModifier} on the ${side} side.`;
     }
     return `The blue ${currentPlayer} shows the correct location. Try a new play when ready.`;
-  }, [answered, correctHSpot.c, currentPlayer, formation, hModifier, instruction, locationAnswered, locationDigit, phase, resultCorrect, runLocation.concept, runLocation.side]);
+  }, [answered, correctHSpot.c, currentPlayer, formation, hModifier, instruction, locationAnswered, locationDigit, phase, resultCorrect, selectedRunPlay.concept]);
 
   function unlockCard(targetPhase: CardPhase) {
     const key = cardKeyForPhase(targetPhase);
@@ -501,15 +546,15 @@ export default function Home() {
       });
     } else if (targetPhase === 4) {
       setP4Mastery((current) => {
-        const phaseWasMastered = phaseMastered(current);
+        const phaseWasMastered = runPhaseMastered(current);
         const wasMastered = current[formation] >= 5;
         const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
         if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 4!`);
-        if (!phase5Unlocked && phaseMastered(next)) {
+        if (!phase5Unlocked && runPhaseMastered(next)) {
           setPhase5Unlocked(true);
           setCelebration("Phase 5 unlocked! The second digit tells where the runner is going.");
         }
-        if (!phaseWasMastered && phaseMastered(next)) unlockCard(4);
+        if (!phaseWasMastered && runPhaseMastered(next)) unlockCard(4);
         return next;
       });
     } else {
@@ -589,9 +634,9 @@ export default function Home() {
     setAnswered(phase === 4);
     setCarrierHistory((current) => ({
       ...current,
-      [carrierDigit]: {
-        ...current[carrierDigit],
-        [correct ? "correct" : "incorrect"]: current[carrierDigit][correct ? "correct" : "incorrect"] + 1,
+      [carrierHistoryDigit]: {
+        ...current[carrierHistoryDigit],
+        [correct ? "correct" : "incorrect"]: current[carrierHistoryDigit][correct ? "correct" : "incorrect"] + 1,
       },
     }));
     if (correct && phase === 4) {
@@ -646,23 +691,30 @@ export default function Home() {
 
   function resetPlay(nextPhase = phase) {
     const mastery = nextPhase === 1 ? p1Mastery : nextPhase === 2 ? p2Mastery : nextPhase === 3 ? p3Mastery : nextPhase === 4 ? p4Mastery : p5Mastery;
-    const nextFormation = pickWeightedFormation(mastery, formation, repeatCount);
-    const nextModifier = pickWeightedModifier(hHistory, hModifier, hRepeatCount);
-    const nextCarrier = pickWeightedCarrier(carrierHistory, carrierDigit, carrierRepeatCount);
-    let nextLocation = pickWeightedLocation(locationHistory, locationDigit, locationRepeatCount);
-    if (`${nextFormation} ${nextModifier} ${nextCarrier}${nextLocation}` === completeCall) {
-      nextLocation = LOCATION_DIGITS.find((digit) => digit !== nextLocation) ?? "0";
+    if (nextPhase === 4 || nextPhase === 5) {
+      const nextPlay = pickApprovedRunPlay(
+        nextPhase,
+        mastery,
+        carrierHistory,
+        locationHistory,
+        selectedRunPlay.id,
+        runPlayRepeatCount,
+        selectedRunPlay.formation,
+        runFormationRepeatCount,
+      );
+      setRunPlayRepeatCount(nextPlay.id === selectedRunPlay.id ? runPlayRepeatCount + 1 : 1);
+      setRunFormationRepeatCount(nextPlay.formation === selectedRunPlay.formation ? runFormationRepeatCount + 1 : 1);
+      setSelectedRunPlay(nextPlay);
+      setFormation(nextPlay.formation);
+      setHModifier(nextPlay.hModifier);
+    } else {
+      const nextFormation = pickWeightedFormation(mastery, formation, repeatCount);
+      const nextModifier = pickWeightedModifier(hHistory, hModifier, hRepeatCount);
+      setRepeatCount(nextFormation === formation ? repeatCount + 1 : 1);
+      setHRepeatCount(nextModifier === hModifier ? hRepeatCount + 1 : 1);
+      setFormation(nextFormation);
+      setHModifier(nextModifier);
     }
-    const nextRunNumber = makeRunNumber(nextCarrier, nextLocation);
-    setRepeatCount(nextFormation === formation ? repeatCount + 1 : 1);
-    setHRepeatCount(nextModifier === hModifier ? hRepeatCount + 1 : 1);
-    setCarrierRepeatCount(nextCarrier === carrierDigit ? carrierRepeatCount + 1 : 1);
-    setLocationRepeatCount(nextLocation === locationDigit ? locationRepeatCount + 1 : 1);
-    setFormation(nextFormation);
-    setHModifier(nextModifier);
-    setCarrierDigit(nextCarrier);
-    setLocationDigit(nextLocation);
-    setRunNumber(nextRunNumber);
     setCurrentPlayer("Y");
     setPlacements({});
     setHPlacement(null);
@@ -811,7 +863,7 @@ export default function Home() {
             </button>
             <button className={phase === 5 ? "phase-active" : ""} onClick={() => choosePhase(5)} disabled={!phase5Unlocked}>
               <span>Phase 5 {phase5Unlocked ? "✓" : "🔒"}</span><b>Identify the Run Location</b>
-              {!phase5Unlocked && <small>Master all six formations in Phase 4 to unlock run-location training</small>}
+              {!phase5Unlocked && <small>Master Right, Left, and Rip in Phase 4 to unlock run-location training</small>}
               <small className="phase-reward">Reward coming in Phase 5B</small>
             </button>
           </div>
@@ -819,7 +871,7 @@ export default function Home() {
           <div className="play-heading">
             <div className="play-call">
               <p className="eyebrow">Coach&apos;s call · Phase {phase}</p>
-              <h1>{phase >= 4 ? completeCall : `${formation}${phase === 3 ? ` ${hModifier}` : ""}`}!</h1>
+              <h1 className={phase >= 4 ? "approved-play-call" : undefined}>{phase >= 4 ? completeCall : `${formation}${phase === 3 ? ` ${hModifier}` : ""}!`}</h1>
             </div>
             <div className={`feedback ${answered ? "visible" : ""} ${answered && resultCorrect ? "success" : "try-again"}`} aria-live="polite">
               <span className="feedback-icon">{answered ? (resultCorrect ? "✓" : "!") : locationActive ? "?" : currentPlayer}</span>
@@ -949,7 +1001,13 @@ export default function Home() {
                   {quizAnswered && (
                     <div className={`quiz-result ${resultCorrect ? "correct" : "incorrect"}`} role="status">
                       <b>{resultCorrect ? "Correct!" : "Not quite."}</b>
-                      <p>The {carrierDigit} in {runNumber} means {ballCarrier} carries the ball.</p>
+                      <p>{selectedRunPlay.specialType === "qb-keep"
+                        ? `The play call says QB Keep, so ${ballCarrier} carries the ball.`
+                        : selectedRunPlay.specialType === "reverse"
+                          ? `The reverse finishes with ${ballCarrier} carrying the ball.`
+                          : selectedRunPlay.specialType === "sweep" || selectedRunPlay.specialType === "empty-sweep"
+                            ? `On this sweep, ${ballCarrier} carries the ball.`
+                            : `The ${runNumber[0]} in ${runNumber} means ${ballCarrier} carries the ball.`}</p>
                       {phase === 5
                         ? <button className="primary-button" onClick={beginRunLocation}>Continue to Run Location <span>→</span></button>
                         : <button className="primary-button" onClick={() => resetPlay()}>Next Play <span>→</span></button>}
@@ -1086,14 +1144,15 @@ export default function Home() {
 }
 
 function MasteryTracker({ phase, mastery }: { phase: Phase; mastery: Mastery }) {
+  const trackedFormations = phase >= 4 ? APPROVED_RUN_FORMATIONS : FORMATION_NAMES;
   return (
     <section className="mastery-panel" aria-label={`Phase ${phase} mastery`}>
       <div className="mastery-heading">
         <div><p className="eyebrow">Phase {phase} progress</p><h2>Formation Mastery</h2></div>
-        <span>{FORMATION_NAMES.filter((name) => mastery[name] >= 5).length}/6 mastered</span>
+        <span>{trackedFormations.filter((name) => mastery[name] >= 5).length}/{trackedFormations.length} mastered</span>
       </div>
       <div className="mastery-grid">
-        {FORMATION_NAMES.map((name) => {
+        {trackedFormations.map((name) => {
           const complete = mastery[name] >= 5;
           return (
             <div key={name} className={`mastery-item ${complete ? "mastered" : ""}`}>

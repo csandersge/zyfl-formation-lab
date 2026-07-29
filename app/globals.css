@@ -45,6 +45,7 @@ nav button:hover, nav button.nav-active { color: white; background: rgba(255,255
 h1, h2, p { margin-top: 0; }
 .play-heading h1, .section-title h1 { line-height: .95; margin: 0; letter-spacing: -.045em; text-transform: uppercase; }
 .play-heading h1 { font-size: clamp(36px, 5vw, 56px); white-space: nowrap; }
+.play-heading h1.approved-play-call { font-size: clamp(25px, 3.4vw, 48px); white-space: normal; overflow-wrap: anywhere; }
 .section-title h1 { font-size: clamp(38px, 6vw, 68px); }
 .challenge-chip { display: flex; align-items: center; gap: 9px; font-weight: 800; color: var(--muted); }
 .challenge-chip span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: white; background: var(--blue); }

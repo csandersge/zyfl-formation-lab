@@ -34,7 +34,15 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   ]);
 
   assert.match(page, /type Phase = 1 \| 2 \| 3 \| 4 \| 5/);
-  assert.match(page, /BALL_CARRIER_MAP/);
+  assert.match(page, /APPROVED_RUN_PLAYS/);
+  assert.equal((page.match(/displayCall: "/g) ?? []).length, 21);
+  assert.match(page, /displayCall: "Left C Fake 21 QB Keep Right"/);
+  assert.match(page, /displayCall: "Right C Empty 18 Sweep"/);
+  assert.match(page, /displayCall: "Rip 3 48 Reverse Right"/);
+  assert.match(page, /carrier: "QB".*specialType: "qb-keep"/);
+  assert.match(page, /id: "rip-3-48-reverse-right".*carrier: "H"/);
+  assert.doesNotMatch(page, /pickWeightedCarrier|pickWeightedLocation|makeRunNumber/);
+  assert.doesNotMatch(page, /"6-8"|"6-12"|label: "F", row:/);
   assert.match(page, /carrierDigitHistory/);
   assert.match(page, /version:\s*6/);
   assert.match(page, /runLocationHistory/);
