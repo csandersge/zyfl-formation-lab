@@ -914,7 +914,7 @@ export default function Home() {
             <button className={phase === 5 ? "phase-active" : ""} onClick={() => choosePhase(5)} disabled={!phase5Unlocked}>
               <span>Phase 5 {phase5Unlocked ? "✓" : "🔒"}</span><b>Identify the Run Location</b>
               {!phase5Unlocked && <small>Master every active ball carrier in Phase 4 to unlock run-location training</small>}
-              <small className="phase-reward">Reward coming in Phase 5B</small>
+              <small className="phase-reward">{unlockedCards.phase5 ? "Card Unlocked ✓" : "Reward: Lane Finder"}</small>
             </button>
           </div>
 

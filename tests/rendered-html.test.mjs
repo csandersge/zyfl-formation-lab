@@ -60,6 +60,8 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /phase5: phase5Mastered\(savedPhase5RunLocationMastery\)/);
   assert.match(page, /phase5Mastered\(next\)\) unlockCard\(5\)/);
   assert.match(page, /finishReveal\(false\)/);
+  assert.match(page, /unlockedCards\.phase5 \? "Card Unlocked ✓" : "Reward: Lane Finder"/);
+  assert.doesNotMatch(page, new RegExp(["Phase", "5B"].join(" ")));
   assert.doesNotMatch(page, /APPROVED_RUN_FORMATIONS/);
   assert.match(page, /runLocationHistory/);
   assert.match(page, /Where is the runner going\?/);
