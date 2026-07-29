@@ -41,6 +41,10 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /displayCall: "Right C Empty 18 Sweep"/);
   assert.match(page, /displayCall: "Rip 3 48 Reverse Right"/);
   assert.match(page, /carrier: "QB".*specialType: "qb-keep"/);
+  assert.match(page, /displayCall: "Left C Fake 21 QB Keep Right".*displayedRunNumber: "21".*carrier: "QB".*runLocationDigit: "8".*concept: "Outside Zone Right"/);
+  assert.match(page, /displayCall: "Right C Fake 20 QB Keep Left".*displayedRunNumber: "20".*carrier: "QB".*runLocationDigit: "9".*concept: "Outside Zone Left"/);
+  assert.match(page, /runLocationMastery\[play\.runLocationDigit\]/);
+  assert.match(page, /locationDigit = selectedRunPlay\.runLocationDigit/);
   assert.match(page, /id: "rip-3-48-reverse-right".*carrier: "H"/);
   assert.doesNotMatch(page, /pickWeightedCarrier|pickWeightedLocation|makeRunNumber/);
   assert.doesNotMatch(page, /"6-8"|"6-12"|label: "F", row:/);
