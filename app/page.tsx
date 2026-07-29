@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Tab = "play" | "cards" | "help";
-type Phase = 1 | 2 | 3 | 4;
+type Phase = 1 | 2 | 3 | 4 | 5;
+type CardPhase = 1 | 2 | 3 | 4;
 type PlayerLabel = "Y" | "X" | "Z" | "H";
 type ReceiverLabel = "Y" | "X" | "Z";
 type BallCarrier = "QB" | "F" | "H" | "Y" | "X" | "Z";
@@ -12,6 +13,7 @@ type LocationDigit = "0" | "1" | "4" | "5" | "6" | "7" | "8" | "9";
 type HModifier = "A" | "B" | "C" | "D" | "1" | "2" | "3" | "4";
 type HHistory = Record<HModifier, { correct: number; incorrect: number }>;
 type CarrierHistory = Record<CarrierDigit, { correct: number; incorrect: number }>;
+type LocationHistory = Record<LocationDigit, { correct: number; incorrect: number }>;
 type HSpot = { c: number; r: number };
 type FormationName = "Right" | "Left" | "Rip" | "Liz" | "Rock" | "Lex";
 type Cell = `${number}-${number}`;
@@ -29,12 +31,25 @@ const BALL_CARRIERS: BallCarrier[] = ["QB", "F", "H", "Y", "X", "Z"];
 const BALL_CARRIER_MAP: Record<CarrierDigit, BallCarrier> = {
   "1": "QB", "2": "F", "4": "H", "5": "Y", "6": "X", "7": "Z",
 };
+const RUN_LOCATION_MAP: Record<LocationDigit, { concept: string; side: "Right" | "Left" }> = {
+  "0": { concept: "Inside Zone", side: "Right" },
+  "1": { concept: "Inside Zone", side: "Left" },
+  "4": { concept: "Power", side: "Right" },
+  "5": { concept: "Power", side: "Left" },
+  "6": { concept: "Counter", side: "Right" },
+  "7": { concept: "Counter", side: "Left" },
+  "8": { concept: "Outside Zone", side: "Right" },
+  "9": { concept: "Outside Zone", side: "Left" },
+};
 const EMPTY_H_HISTORY: HHistory = Object.fromEntries(
   H_MODIFIERS.map((modifier) => [modifier, { correct: 0, incorrect: 0 }]),
 ) as HHistory;
 const EMPTY_CARRIER_HISTORY: CarrierHistory = Object.fromEntries(
   CARRIER_DIGITS.map((digit) => [digit, { correct: 0, incorrect: 0 }]),
 ) as CarrierHistory;
+const EMPTY_LOCATION_HISTORY: LocationHistory = Object.fromEntries(
+  LOCATION_DIGITS.map((digit) => [digit, { correct: 0, incorrect: 0 }]),
+) as LocationHistory;
 const NUMBER_H_SPOTS: Record<"1" | "2" | "3" | "4", HSpot> = {
   "1": { c: 9, r: 5 }, "2": { c: 8.5, r: 2 }, "3": { c: 7.5, r: 2 }, "4": { c: 4, r: 2 },
 };
@@ -99,7 +114,7 @@ const FIXED = [
   { label: "F", row: 6, col: 10 },
 ];
 const CARD_DATA: Record<CardKey, {
-  phase: Phase;
+  phase: CardPhase;
   rarity: "Rookie" | "Pro" | "Elite" | "Legendary";
   title: string;
   theme: string;
@@ -160,11 +175,22 @@ function readCarrierHistory(value: unknown): CarrierHistory {
   })) as CarrierHistory;
 }
 
+function readLocationHistory(value: unknown): LocationHistory {
+  const source = value && typeof value === "object" ? value as Partial<LocationHistory> : {};
+  return Object.fromEntries(LOCATION_DIGITS.map((digit) => {
+    const item = source[digit];
+    return [digit, {
+      correct: typeof item?.correct === "number" ? Math.max(0, Math.floor(item.correct)) : 0,
+      incorrect: typeof item?.incorrect === "number" ? Math.max(0, Math.floor(item.incorrect)) : 0,
+    }];
+  })) as LocationHistory;
+}
+
 function phaseMastered(mastery: Mastery) {
   return FORMATION_NAMES.every((name) => mastery[name] >= 5);
 }
 
-function cardKeyForPhase(phase: Phase): CardKey {
+function cardKeyForPhase(phase: CardPhase): CardKey {
   return `phase${phase}` as CardKey;
 }
 
@@ -223,10 +249,18 @@ function pickWeightedCarrier(history: CarrierHistory, previous?: CarrierDigit, r
   return pool[Math.floor(Math.random() * pool.length)] ?? "2";
 }
 
-function makeRunNumber(carrierDigit: CarrierDigit, previous?: string) {
-  const choices = LOCATION_DIGITS.filter((digit) => `${carrierDigit}${digit}` !== previous);
-  const location = choices[Math.floor(Math.random() * choices.length)] ?? "0";
-  return `${carrierDigit}${location}`;
+function pickWeightedLocation(history: LocationHistory, previous?: LocationDigit, repeatCount = 0) {
+  const pool = LOCATION_DIGITS.flatMap((digit) => {
+    if (digit === previous && repeatCount >= 2) return [];
+    const item = history[digit];
+    const weight = Math.max(1, 4 + item.incorrect * 2 - Math.min(item.correct, 3));
+    return Array.from({ length: Math.min(weight, 18) }, () => digit);
+  });
+  return pool[Math.floor(Math.random() * pool.length)] ?? "0";
+}
+
+function makeRunNumber(carrierDigit: CarrierDigit, locationDigit: LocationDigit) {
+  return `${carrierDigit}${locationDigit}`;
 }
 
 export default function Home() {
@@ -246,18 +280,28 @@ export default function Home() {
   const [p2Mastery, setP2Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [p3Mastery, setP3Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [p4Mastery, setP4Mastery] = useState<Mastery>(EMPTY_MASTERY);
+  const [p5Mastery, setP5Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [phase2Unlocked, setPhase2Unlocked] = useState(false);
   const [phase3Unlocked, setPhase3Unlocked] = useState(false);
   const [phase4Unlocked, setPhase4Unlocked] = useState(false);
+  const [phase5Unlocked, setPhase5Unlocked] = useState(false);
   const [hHistory, setHHistory] = useState<HHistory>(EMPTY_H_HISTORY);
   const [carrierHistory, setCarrierHistory] = useState<CarrierHistory>(EMPTY_CARRIER_HISTORY);
   const [carrierDigit, setCarrierDigit] = useState<CarrierDigit>("2");
   const [carrierRepeatCount, setCarrierRepeatCount] = useState(1);
+  const [locationHistory, setLocationHistory] = useState<LocationHistory>(EMPTY_LOCATION_HISTORY);
+  const [locationDigit, setLocationDigit] = useState<LocationDigit>("0");
+  const [locationRepeatCount, setLocationRepeatCount] = useState(1);
   const [runNumber, setRunNumber] = useState("20");
   const [quizOpen, setQuizOpen] = useState(false);
   const [quizAnswered, setQuizAnswered] = useState(false);
   const [quizChoice, setQuizChoice] = useState<BallCarrier | null>(null);
+  const [carrierWasCorrect, setCarrierWasCorrect] = useState(false);
+  const [locationActive, setLocationActive] = useState(false);
+  const [locationAnswered, setLocationAnswered] = useState(false);
+  const [locationChoice, setLocationChoice] = useState<LocationDigit | null>(null);
   const quizRef = useRef<HTMLDivElement>(null);
+  const landmarksRef = useRef<HTMLDivElement>(null);
   const [celebration, setCelebration] = useState<string | null>(null);
   const [unlockedCards, setUnlockedCards] = useState<CardState>(EMPTY_CARD_STATE);
   const [cardRevealSeen, setCardRevealSeen] = useState<CardState>(EMPTY_CARD_STATE);
@@ -276,8 +320,10 @@ export default function Home() {
       const savedP2 = readMastery(saved.phase2Mastery);
       const savedP3 = readMastery(saved.phase3Mastery);
       const savedP4 = readMastery(saved.phase4Mastery);
+      const savedP5 = readMastery(saved.phase5Mastery);
       const savedHHistory = readHHistory(saved.hModifierHistory);
       const savedCarrierHistory = readCarrierHistory(saved.carrierDigitHistory);
+      const savedLocationHistory = readLocationHistory(saved.runLocationHistory);
       const savedRevealSeen = readCardState(saved.cardRevealSeen);
       const masteryCards: CardState = {
         phase1: phaseMastered(savedP1),
@@ -292,20 +338,25 @@ export default function Home() {
       setP2Mastery(savedP2);
       setP3Mastery(savedP3);
       setP4Mastery(savedP4);
+      setP5Mastery(savedP5);
       setHHistory(savedHHistory);
       setCarrierHistory(savedCarrierHistory);
+      setLocationHistory(savedLocationHistory);
       setUnlockedCards(migratedCards);
       setCardRevealSeen(savedRevealSeen);
       setPhase2Unlocked(Boolean(saved.phase2Unlocked) || phaseMastered(savedP1));
       setPhase3Unlocked(Boolean(saved.phase3Unlocked) || phaseMastered(savedP2));
       setPhase4Unlocked(Boolean(saved.phase4Unlocked) || phaseMastered(savedP3));
+      setPhase5Unlocked(Boolean(saved.phase5Unlocked) || phaseMastered(savedP4));
       const firstUnseen = CARD_KEYS.find((key) => migratedCards[key] && !savedRevealSeen[key]);
       if (firstUnseen) setPendingReveal(firstUnseen);
       setFormation(pickWeightedFormation(savedP1));
       setHModifier(pickWeightedModifier(savedHHistory));
       const nextCarrier = pickWeightedCarrier(savedCarrierHistory);
+      const nextLocation = pickWeightedLocation(savedLocationHistory);
       setCarrierDigit(nextCarrier);
-      setRunNumber(makeRunNumber(nextCarrier));
+      setLocationDigit(nextLocation);
+      setRunNumber(makeRunNumber(nextCarrier, nextLocation));
     } catch {
       setFormation(pickWeightedFormation(EMPTY_MASTERY));
     }
@@ -315,7 +366,7 @@ export default function Home() {
   useEffect(() => {
     if (!ready) return;
     localStorage.setItem("zyfl-progress", JSON.stringify({
-      version: 5,
+      version: 6,
       phase1Mastery: p1Mastery,
       phase1Mastered: phaseMastered(p1Mastery),
       phase2Unlocked,
@@ -327,12 +378,16 @@ export default function Home() {
       phase4Unlocked,
       phase4Mastery: p4Mastery,
       phase4Mastered: phaseMastered(p4Mastery),
+      phase5Unlocked,
+      phase5Mastery: p5Mastery,
+      phase5Mastered: phaseMastered(p5Mastery),
       hModifierHistory: hHistory,
       carrierDigitHistory: carrierHistory,
+      runLocationHistory: locationHistory,
       unlockedCards,
       cardRevealSeen,
     }));
-  }, [p1Mastery, p2Mastery, p3Mastery, p4Mastery, phase2Unlocked, phase3Unlocked, phase4Unlocked, hHistory, carrierHistory, unlockedCards, cardRevealSeen, ready]);
+  }, [p1Mastery, p2Mastery, p3Mastery, p4Mastery, p5Mastery, phase2Unlocked, phase3Unlocked, phase4Unlocked, phase5Unlocked, hHistory, carrierHistory, locationHistory, unlockedCards, cardRevealSeen, ready]);
 
   useEffect(() => {
     if (!celebration) return;
@@ -344,6 +399,11 @@ export default function Home() {
     if (!quizOpen) return;
     quizRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
   }, [quizOpen]);
+
+  useEffect(() => {
+    if (!locationActive) return;
+    window.setTimeout(() => landmarksRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus(), 0);
+  }, [locationActive]);
 
   useEffect(() => {
     if (!pendingReveal) return;
@@ -358,12 +418,15 @@ export default function Home() {
     window.setTimeout(() => detailRef.current?.querySelector<HTMLButtonElement>("button")?.focus(), 0);
   }, [detailCard]);
 
-  const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : phase === 3 ? p3Mastery : p4Mastery;
+  const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : phase === 3 ? p3Mastery : phase === 4 ? p4Mastery : p5Mastery;
   const correctCell = currentPlayer === "H" ? null : FORMATIONS[formation].players[currentPlayer];
   const correctHSpot = getHSpot(formation, hModifier);
   const ballCarrier = BALL_CARRIER_MAP[carrierDigit];
+  const runLocation = RUN_LOCATION_MAP[locationDigit];
   const completeCall = `${formation} ${hModifier} ${runNumber}`;
-  const instruction = phase === 1
+  const instruction = locationActive
+    ? "Where is the runner going?"
+    : phase === 1
     ? "Place the Y player."
     : currentPlayer === "Y" ? "Place the Y player."
       : currentPlayer === "X" ? "Correct. Now place X."
@@ -371,6 +434,11 @@ export default function Home() {
           : "Correct. Now place H.";
 
   const boardStatus = useMemo(() => {
+    if (phase === 5 && locationAnswered) {
+      return resultCorrect
+        ? `Correct! The ${locationDigit} means ${runLocation.concept} ${runLocation.side}.`
+        : `Not quite. The second digit is ${locationDigit}, so the run goes to the ${locationDigit} landmark: ${runLocation.concept} ${runLocation.side}.`;
+    }
     if (!answered) return instruction;
     if (resultCorrect) {
       return phase === 1 ? "Touchdown! Great alignment." : "Formation complete! Keep building mastery.";
@@ -380,9 +448,9 @@ export default function Home() {
       return `Letters place H on the Y side. Numbers place H away from Y. ${formation} ${hModifier} places H at ${hModifier} on the ${side} side.`;
     }
     return `The blue ${currentPlayer} shows the correct location. Try a new play when ready.`;
-  }, [answered, correctHSpot.c, currentPlayer, formation, hModifier, instruction, phase, resultCorrect]);
+  }, [answered, correctHSpot.c, currentPlayer, formation, hModifier, instruction, locationAnswered, locationDigit, phase, resultCorrect, runLocation.concept, runLocation.side]);
 
-  function unlockCard(targetPhase: Phase) {
+  function unlockCard(targetPhase: CardPhase) {
     const key = cardKeyForPhase(targetPhase);
     setUnlockedCards((current) => {
       if (current[key]) return current;
@@ -431,13 +499,24 @@ export default function Home() {
         if (!phaseWasMastered && phaseMastered(next)) unlockCard(3);
         return next;
       });
-    } else {
+    } else if (targetPhase === 4) {
       setP4Mastery((current) => {
         const phaseWasMastered = phaseMastered(current);
         const wasMastered = current[formation] >= 5;
         const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
         if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 4!`);
+        if (!phase5Unlocked && phaseMastered(next)) {
+          setPhase5Unlocked(true);
+          setCelebration("Phase 5 unlocked! The second digit tells where the runner is going.");
+        }
         if (!phaseWasMastered && phaseMastered(next)) unlockCard(4);
+        return next;
+      });
+    } else {
+      setP5Mastery((current) => {
+        const wasMastered = current[formation] >= 5;
+        const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
+        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 5!`);
         return next;
       });
     }
@@ -488,7 +567,7 @@ export default function Home() {
       },
     }));
     if (correct) {
-      if (phase === 4) {
+      if (phase >= 4) {
         setResultCorrect(null);
         setQuizOpen(true);
       } else {
@@ -505,8 +584,9 @@ export default function Home() {
     const correct = choice === ballCarrier;
     setQuizChoice(choice);
     setQuizAnswered(true);
+    setCarrierWasCorrect(correct);
     setResultCorrect(correct);
-    setAnswered(true);
+    setAnswered(phase === 4);
     setCarrierHistory((current) => ({
       ...current,
       [carrierDigit]: {
@@ -514,9 +594,35 @@ export default function Home() {
         [correct ? "correct" : "incorrect"]: current[carrierDigit][correct ? "correct" : "incorrect"] + 1,
       },
     }));
-    if (correct) {
+    if (correct && phase === 4) {
       recordMastery(4);
     }
+  }
+
+  function beginRunLocation() {
+    if (phase !== 5 || !quizAnswered) return;
+    setQuizOpen(false);
+    setLocationActive(true);
+    setAnswered(false);
+    setResultCorrect(null);
+  }
+
+  function chooseRunLocation(choice: LocationDigit) {
+    if (phase !== 5 || !locationActive || locationAnswered) return;
+    const correct = choice === locationDigit;
+    setLocationChoice(choice);
+    setLocationActive(false);
+    setLocationAnswered(true);
+    setAnswered(true);
+    setResultCorrect(correct);
+    setLocationHistory((current) => ({
+      ...current,
+      [locationDigit]: {
+        ...current[locationDigit],
+        [correct ? "correct" : "incorrect"]: current[locationDigit][correct ? "correct" : "incorrect"] + 1,
+      },
+    }));
+    if (correct && carrierWasCorrect) recordMastery(5);
   }
 
   function trapQuizFocus(event: React.KeyboardEvent<HTMLDivElement>) {
@@ -539,17 +645,23 @@ export default function Home() {
   }
 
   function resetPlay(nextPhase = phase) {
-    const mastery = nextPhase === 1 ? p1Mastery : nextPhase === 2 ? p2Mastery : nextPhase === 3 ? p3Mastery : p4Mastery;
+    const mastery = nextPhase === 1 ? p1Mastery : nextPhase === 2 ? p2Mastery : nextPhase === 3 ? p3Mastery : nextPhase === 4 ? p4Mastery : p5Mastery;
     const nextFormation = pickWeightedFormation(mastery, formation, repeatCount);
     const nextModifier = pickWeightedModifier(hHistory, hModifier, hRepeatCount);
     const nextCarrier = pickWeightedCarrier(carrierHistory, carrierDigit, carrierRepeatCount);
-    const nextRunNumber = makeRunNumber(nextCarrier, runNumber);
+    let nextLocation = pickWeightedLocation(locationHistory, locationDigit, locationRepeatCount);
+    if (`${nextFormation} ${nextModifier} ${nextCarrier}${nextLocation}` === completeCall) {
+      nextLocation = LOCATION_DIGITS.find((digit) => digit !== nextLocation) ?? "0";
+    }
+    const nextRunNumber = makeRunNumber(nextCarrier, nextLocation);
     setRepeatCount(nextFormation === formation ? repeatCount + 1 : 1);
     setHRepeatCount(nextModifier === hModifier ? hRepeatCount + 1 : 1);
     setCarrierRepeatCount(nextCarrier === carrierDigit ? carrierRepeatCount + 1 : 1);
+    setLocationRepeatCount(nextLocation === locationDigit ? locationRepeatCount + 1 : 1);
     setFormation(nextFormation);
     setHModifier(nextModifier);
     setCarrierDigit(nextCarrier);
+    setLocationDigit(nextLocation);
     setRunNumber(nextRunNumber);
     setCurrentPlayer("Y");
     setPlacements({});
@@ -560,12 +672,17 @@ export default function Home() {
     setQuizOpen(false);
     setQuizAnswered(false);
     setQuizChoice(null);
+    setCarrierWasCorrect(false);
+    setLocationActive(false);
+    setLocationAnswered(false);
+    setLocationChoice(null);
   }
 
   function choosePhase(nextPhase: Phase) {
     if (nextPhase === 2 && !phase2Unlocked) return;
     if (nextPhase === 3 && !phase3Unlocked) return;
     if (nextPhase === 4 && !phase4Unlocked) return;
+    if (nextPhase === 5 && !phase5Unlocked) return;
     setPhase(nextPhase);
     resetPlay(nextPhase);
   }
@@ -579,13 +696,37 @@ export default function Home() {
   }
 
   function carrierClass(label: string) {
-    return phase === 4 && quizAnswered && label === ballCarrier ? "ball-carrier" : "";
+    return phase >= 4 && quizAnswered && label === ballCarrier ? "ball-carrier" : "";
   }
 
   function footballBadge(label: string) {
-    return phase === 4 && quizAnswered && label === ballCarrier
+    return phase >= 4 && quizAnswered && label === ballCarrier
       ? <span className="football-badge" aria-label="Ball carrier">🏈</span>
       : null;
+  }
+
+  function runPathStyle(): React.CSSProperties {
+    let start: HSpot;
+    if (ballCarrier === "QB") start = { c: 10, r: 4 };
+    else if (ballCarrier === "F") start = { c: 10, r: 6 };
+    else if (ballCarrier === "H") start = correctHSpot;
+    else {
+      const [r, c] = FORMATIONS[formation].players[ballCarrier].split("-").map(Number);
+      start = { c, r };
+    }
+    const targetAfter = LANDMARKS.find((mark) => mark.label === locationDigit)?.after ?? 10;
+    const startX = (start.c - .5) / 19;
+    const startY = (start.r - .5) / 6;
+    const targetX = targetAfter / 19;
+    const targetY = .04;
+    const dx = targetX - startX;
+    const dy = (targetY - startY) * (6 / 19);
+    return {
+      left: `${startX * 100}%`,
+      top: `${startY * 100}%`,
+      width: `${Math.hypot(dx, dy) * 100}%`,
+      transform: `rotate(${Math.atan2(dy, dx) * 180 / Math.PI}deg)`,
+    };
   }
 
   function finishReveal(viewCollection: boolean) {
@@ -692,29 +833,61 @@ export default function Home() {
               {!phase4Unlocked && <small>Master all six formations in Phase 3 to unlock ball-carrier training</small>}
               <small className="phase-reward">{unlockedCards.phase4 ? "Card Unlocked ✓" : "Reward: Legendary Football Card"}</small>
             </button>
+            <button className={phase === 5 ? "phase-active" : ""} onClick={() => choosePhase(5)} disabled={!phase5Unlocked}>
+              <span>Phase 5 {phase5Unlocked ? "✓" : "🔒"}</span><b>Identify the Run Location</b>
+              {!phase5Unlocked && <small>Master all six formations in Phase 4 to unlock run-location training</small>}
+              <small className="phase-reward">Reward coming in Phase 5B</small>
+            </button>
           </div>
 
           <div className="play-heading">
             <div className="play-call">
               <p className="eyebrow">Coach&apos;s call · Phase {phase}</p>
-              <h1>{phase === 4 ? completeCall : `${formation}${phase === 3 ? ` ${hModifier}` : ""}`}!</h1>
+              <h1>{phase >= 4 ? completeCall : `${formation}${phase === 3 ? ` ${hModifier}` : ""}`}!</h1>
             </div>
             <div className={`feedback ${answered ? "visible" : ""} ${answered && resultCorrect ? "success" : "try-again"}`} aria-live="polite">
-              <span className="feedback-icon">{answered ? (resultCorrect ? "✓" : "!") : currentPlayer}</span>
+              <span className="feedback-icon">{answered ? (resultCorrect ? "✓" : "!") : locationActive ? "?" : currentPlayer}</span>
               <div>
-                <b>{answered ? (resultCorrect ? (phase === 1 ? "Great alignment!" : "Formation complete!") : `Not quite—study the blue ${currentPlayer}.`) : instruction}</b>
+                <b>{locationAnswered
+                  ? (resultCorrect ? "Run location correct!" : "Run location revealed.")
+                  : answered
+                    ? (resultCorrect ? (phase === 1 ? "Great alignment!" : "Formation complete!") : `Not quite—study the blue ${currentPlayer}.`)
+                    : instruction}</b>
                 <p>{boardStatus}</p>
               </div>
               {answered && <button className="primary-button" onClick={() => resetPlay()}>Next Play <span>→</span></button>}
             </div>
-            <div className="challenge-chip"><span>{quizOpen ? "?" : currentPlayer}</span>{quizOpen ? "Name the carrier" : `Place ${currentPlayer}`}</div>
+            <div className="challenge-chip">
+              <span>{quizOpen || locationActive ? "?" : currentPlayer}</span>
+              {quizOpen ? "Name the carrier" : locationActive ? "Pick the landmark" : `Place ${currentPlayer}`}
+            </div>
           </div>
 
           <div className={`board-wrap ${answered && resultCorrect ? "board-correct" : ""}`}>
-            <div className="landmarks" aria-hidden="true">
-              {LANDMARKS.map((mark) => (
-                <b key={mark.label} style={{ gridColumn: mark.after, justifySelf: "end" }}>{mark.label}</b>
-              ))}
+            <div ref={landmarksRef} className={`landmarks ${locationActive ? "location-active" : ""}`} aria-label={phase === 5 && (locationActive || locationAnswered) ? "Run location landmarks" : undefined}>
+              {LANDMARKS.map((mark) => {
+                const validLocation = LOCATION_DIGITS.includes(mark.label as LocationDigit);
+                const selectedLocation = locationChoice === mark.label;
+                const correctLocation = locationAnswered && locationDigit === mark.label;
+                return phase === 5 && (locationActive || locationAnswered) && validLocation ? (
+                  <button
+                    key={mark.label}
+                    className={`landmark-button ${selectedLocation ? "selected-location" : ""} ${selectedLocation && !correctLocation ? "wrong-location" : ""} ${correctLocation ? "correct-location" : ""}`}
+                    style={{ gridColumn: mark.after, justifySelf: "end" }}
+                    onClick={() => chooseRunLocation(mark.label as LocationDigit)}
+                    disabled={!locationActive || locationAnswered}
+                    aria-label={locationAnswered
+                      ? `Run location ${mark.label}, ${RUN_LOCATION_MAP[mark.label as LocationDigit].concept} ${RUN_LOCATION_MAP[mark.label as LocationDigit].side}`
+                      : `Run location ${mark.label}`}
+                  >
+                    {mark.label}
+                    {locationAnswered && selectedLocation && <i aria-hidden="true">{correctLocation ? "✓" : "×"}</i>}
+                    {locationAnswered && correctLocation && !selectedLocation && <i aria-hidden="true">✓</i>}
+                  </button>
+                ) : (
+                  <b key={mark.label} aria-hidden="true" style={{ gridColumn: mark.after, justifySelf: "end" }}>{mark.label}</b>
+                );
+              })}
             </div>
             <div className="formation-board" aria-label={`Formation board for ${formation}`}>
               <div className="line-of-scrimmage" />
@@ -751,7 +924,7 @@ export default function Home() {
                       top: `calc((${spot.r} - 0.5) * (100% / 6))`,
                     }}
                     onClick={() => chooseHSpot(spot.modifier)}
-                    disabled={answered || quizOpen || currentPlayer !== "H"}
+                    disabled={answered || quizOpen || locationActive || locationAnswered || currentPlayer !== "H"}
                     data-active={currentPlayer === "H"}
                     aria-label="Place H at this location"
                   >
@@ -766,8 +939,11 @@ export default function Home() {
                   {player.label}{footballBadge(player.label)}
                 </span>
               ))}
+              {phase === 5 && locationAnswered && (
+                <div className="run-path" style={runPathStyle()} aria-hidden="true"><span /></div>
+              )}
             </div>
-            {phase === 4 && quizOpen && (
+            {phase >= 4 && quizOpen && (
               <div className="quiz-overlay">
                 <div
                   ref={quizRef}
@@ -801,7 +977,9 @@ export default function Home() {
                     <div className={`quiz-result ${resultCorrect ? "correct" : "incorrect"}`} role="status">
                       <b>{resultCorrect ? "Correct!" : "Not quite."}</b>
                       <p>The {carrierDigit} in {runNumber} means {ballCarrier} carries the ball.</p>
-                      <button className="primary-button" onClick={() => resetPlay()}>Next Play <span>→</span></button>
+                      {phase === 5
+                        ? <button className="primary-button" onClick={beginRunLocation}>Continue to Run Location <span>→</span></button>
+                        : <button className="primary-button" onClick={() => resetPlay()}>Next Play <span>→</span></button>}
                     </div>
                   )}
                 </div>
@@ -860,6 +1038,7 @@ export default function Home() {
               ["2", "Build the formation", "Place Y, then X, then Z in all six formations."],
               ["3", "Add H", "Letters follow Y. Numbers send H away from Y."],
               ["4", "Name the carrier", "The first run-number digit tells who carries the ball."],
+              ["5", "Find the run location", "Click the landmark shown by the second run-number digit."],
             ].map(([number, title, copy]) => <article key={number}><span>{number}</span><h2>{title}</h2><p>{copy}</p></article>)}
           </div>
           <div className="reference">

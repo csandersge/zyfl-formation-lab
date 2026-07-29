@@ -33,10 +33,12 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /type Phase = 1 \| 2 \| 3 \| 4/);
+  assert.match(page, /type Phase = 1 \| 2 \| 3 \| 4 \| 5/);
   assert.match(page, /BALL_CARRIER_MAP/);
   assert.match(page, /carrierDigitHistory/);
-  assert.match(page, /version:\s*5/);
+  assert.match(page, /version:\s*6/);
+  assert.match(page, /runLocationHistory/);
+  assert.match(page, /Where is the runner going\?/);
   assert.match(page, /unlockedCards/);
   assert.match(page, /cardRevealSeen/);
   assert.match(page, /My Cards/);
