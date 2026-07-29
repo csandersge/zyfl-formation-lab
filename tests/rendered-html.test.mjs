@@ -21,13 +21,14 @@ test("server-renders the ZYFL Formation Lab", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>ZYFL Formation Lab<\/title>/i);
-  assert.match(html, /Phase 4/);
+  assert.match(html, /Level 4/);
   assert.match(html, /Identify the Ball Carrier/);
-  assert.match(html, /Master all six formations in Phase 3/);
+  assert.match(html, /Master all six formations in Level 3/);
+  assert.doesNotMatch(html, />[^<]*\bPhases?\b[^<]*</i);
   assert.match(html, /Formation Mastery/);
 });
 
-test("includes Phase 4 carrier rules, quiz, and compatible storage", async () => {
+test("includes Level 4 carrier rules, quiz, and compatible storage", async () => {
   const [page, css] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -75,7 +76,7 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   assert.doesNotMatch(page, /image:\s*"\/assets\/cards\//);
   assert.doesNotMatch(page, /Build My Team/);
   assert.doesNotMatch(page, /"5", "Name the carrier"/);
-  assert.doesNotMatch(page, /"Unlock Phase 2"/);
+  assert.doesNotMatch(page, /"Unlock Level 2"/);
   assert.match(page, /role="dialog"/);
   assert.match(page, /aria-modal="true"/);
   assert.match(page, /Who is carrying the ball\?/);

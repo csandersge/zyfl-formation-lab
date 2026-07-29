@@ -175,27 +175,27 @@ const CARD_DATA: Record<CardKey, {
   phase1: {
     phase: 1, rarity: "Rookie", title: "Edge Alignment", theme: "Tight End / Y Position",
     image: "assets/cards/phase-1-rookie-edge-alignment.png",
-    alt: "Rookie Edge Alignment football card unlocked for mastering Phase 1",
+    alt: "Rookie Edge Alignment football card unlocked for mastering Level 1",
   },
   phase2: {
     phase: 2, rarity: "Pro", title: "Perimeter Playmaker", theme: "Wide Receiver / Y, X, and Z",
     image: "assets/cards/phase-2-pro-perimeter-playmaker.png",
-    alt: "Pro Perimeter Playmaker football card unlocked for mastering Phase 2",
+    alt: "Pro Perimeter Playmaker football card unlocked for mastering Level 2",
   },
   phase3: {
     phase: 3, rarity: "Elite", title: "Hybrid Force", theme: "H-Back",
     image: "assets/cards/phase-3-elite-hybrid-force.png",
-    alt: "Elite Hybrid Force football card unlocked for mastering Phase 3",
+    alt: "Elite Hybrid Force football card unlocked for mastering Level 3",
   },
   phase4: {
     phase: 4, rarity: "Legendary", title: "Ball Carrier Mastery", theme: "Ball Carrier",
     image: "assets/cards/phase-4-legendary-ball-carrier-mastery.png",
-    alt: "Legendary Ball Carrier Mastery football card unlocked for mastering Phase 4",
+    alt: "Legendary Ball Carrier Mastery football card unlocked for mastering Level 4",
   },
   phase5: {
     phase: 5, rarity: "Mythic", title: "Lane Finder", theme: "Mastered run locations",
     image: "assets/cards/lane-finder.png",
-    alt: "Lane Finder Mythic football reward card unlocked for mastering Phase 5",
+    alt: "Lane Finder Mythic football reward card unlocked for mastering Level 5",
   },
 };
 const CARD_KEYS = Object.keys(CARD_DATA) as CardKey[];
@@ -561,7 +561,7 @@ export default function Home() {
         if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered!`);
         if (!phase2Unlocked && phaseMastered(next)) {
           setPhase2Unlocked(true);
-          setCelebration("Phase 2 unlocked! Now place Y, X, and Z.");
+          setCelebration("Level 2 unlocked! Now place Y, X, and Z.");
         }
         if (!phaseWasMastered && phaseMastered(next)) unlockCard(1);
         return next;
@@ -571,10 +571,10 @@ export default function Home() {
         const phaseWasMastered = phaseMastered(current);
         const wasMastered = current[formation] >= 5;
         const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
-        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 2!`);
+        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Level 2!`);
         if (!phase3Unlocked && phaseMastered(next)) {
           setPhase3Unlocked(true);
-          setCelebration("Phase 3 unlocked! Letters follow Y; numbers go away from Y.");
+          setCelebration("Level 3 unlocked! Letters follow Y; numbers go away from Y.");
         }
         if (!phaseWasMastered && phaseMastered(next)) unlockCard(2);
         return next;
@@ -584,10 +584,10 @@ export default function Home() {
         const phaseWasMastered = phaseMastered(current);
         const wasMastered = current[formation] >= 5;
         const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
-        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 3!`);
+        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Level 3!`);
         if (!phase4Unlocked && phaseMastered(next)) {
           setPhase4Unlocked(true);
-          setCelebration("Phase 4 unlocked! The first run-number digit names the ball carrier.");
+          setCelebration("Level 4 unlocked! The first run-number digit names the ball carrier.");
         }
         if (!phaseWasMastered && phaseMastered(next)) unlockCard(3);
         return next;
@@ -597,10 +597,10 @@ export default function Home() {
         const phaseWasMastered = phase4Mastered(current);
         const wasMastered = (current[ballCarrier] ?? 0) >= 5;
         const next = { ...current, [ballCarrier]: Math.min(5, (current[ballCarrier] ?? 0) + 1) };
-        if (!wasMastered && next[ballCarrier] === 5) setCelebration(`${ballCarrier} mastered in Phase 4!`);
+        if (!wasMastered && next[ballCarrier] === 5) setCelebration(`${ballCarrier} mastered in Level 4!`);
         if (!phase5Unlocked && phase4Mastered(next)) {
           setPhase5Unlocked(true);
-          setCelebration("Phase 5 unlocked! The second digit tells where the runner is going.");
+          setCelebration("Level 5 unlocked! The second digit tells where the runner is going.");
         }
         if (!phaseWasMastered && phase4Mastered(next)) unlockCard(4);
         return next;
@@ -610,7 +610,7 @@ export default function Home() {
         const phaseWasMastered = phase5Mastered(current);
         const wasMastered = (current[locationDigit] ?? 0) >= 5;
         const next = { ...current, [locationDigit]: Math.min(5, (current[locationDigit] ?? 0) + 1) };
-        if (!wasMastered && next[locationDigit] === 5) setCelebration(`${locationDigit} · ${selectedRunPlay.concept} mastered in Phase 5!`);
+        if (!wasMastered && next[locationDigit] === 5) setCelebration(`${locationDigit} · ${selectedRunPlay.concept} mastered in Level 5!`);
         if (!phaseWasMastered && phase5Mastered(next)) unlockCard(5);
         return next;
       });
@@ -891,36 +891,36 @@ export default function Home() {
         <section className="play-page">
           {celebration && <div className="celebration" role="status"><span>★</span>{celebration}</div>}
 
-          <div className="phase-selector" aria-label="Training phase">
+          <div className="phase-selector" aria-label="Training level">
             <button className={phase === 1 ? "phase-active" : ""} onClick={() => choosePhase(1)}>
-              <span>Phase 1</span><b>Place Y</b>
+              <span>Level 1</span><b>Place Y</b>
               <small className="phase-reward">{unlockedCards.phase1 ? "Card Unlocked ✓" : "Reward: Rookie Football Card"}</small>
             </button>
             <button className={phase === 2 ? "phase-active" : ""} onClick={() => choosePhase(2)} disabled={!phase2Unlocked}>
-              <span>Phase 2 {phase2Unlocked ? "✓" : "🔒"}</span><b>Place Y, X & Z</b>
+              <span>Level 2 {phase2Unlocked ? "✓" : "🔒"}</span><b>Place Y, X & Z</b>
               {!phase2Unlocked && <small>Master all six formations to unlock</small>}
               <small className="phase-reward">{unlockedCards.phase2 ? "Card Unlocked ✓" : "Reward: Pro Football Card"}</small>
             </button>
             <button className={phase === 3 ? "phase-active" : ""} onClick={() => choosePhase(3)} disabled={!phase3Unlocked}>
-              <span>Phase 3 {phase3Unlocked ? "✓" : "🔒"}</span><b>Add the H back</b>
-              {!phase3Unlocked && <small>Master Phase 2 to unlock H-back training</small>}
+              <span>Level 3 {phase3Unlocked ? "✓" : "🔒"}</span><b>Add the H back</b>
+              {!phase3Unlocked && <small>Master Level 2 to unlock H-back training</small>}
               <small className="phase-reward">{unlockedCards.phase3 ? "Card Unlocked ✓" : "Reward: Elite Football Card"}</small>
             </button>
             <button className={phase === 4 ? "phase-active" : ""} onClick={() => choosePhase(4)} disabled={!phase4Unlocked}>
-              <span>Phase 4 {phase4Unlocked ? "✓" : "🔒"}</span><b>Identify the Ball Carrier</b>
-              {!phase4Unlocked && <small>Master all six formations in Phase 3 to unlock ball-carrier training</small>}
+              <span>Level 4 {phase4Unlocked ? "✓" : "🔒"}</span><b>Identify the Ball Carrier</b>
+              {!phase4Unlocked && <small>Master all six formations in Level 3 to unlock ball-carrier training</small>}
               <small className="phase-reward">{unlockedCards.phase4 ? "Card Unlocked ✓" : "Reward: Legendary Football Card"}</small>
             </button>
             <button className={phase === 5 ? "phase-active" : ""} onClick={() => choosePhase(5)} disabled={!phase5Unlocked}>
-              <span>Phase 5 {phase5Unlocked ? "✓" : "🔒"}</span><b>Identify the Run Location</b>
-              {!phase5Unlocked && <small>Master every active ball carrier in Phase 4 to unlock run-location training</small>}
+              <span>Level 5 {phase5Unlocked ? "✓" : "🔒"}</span><b>Identify the Run Location</b>
+              {!phase5Unlocked && <small>Master every active ball carrier in Level 4 to unlock run-location training</small>}
               <small className="phase-reward">{unlockedCards.phase5 ? "Card Unlocked ✓" : "Reward: Lane Finder"}</small>
             </button>
           </div>
 
           <div className="play-heading">
             <div className="play-call">
-              <p className="eyebrow">Coach&apos;s call · Phase {phase}</p>
+              <p className="eyebrow">Coach&apos;s call · Level {phase}</p>
               <h1 className={phase >= 4 ? "approved-play-call" : undefined}>{phase >= 4 ? completeCall : `${formation}${phase === 3 ? ` ${hModifier}` : ""}!`}</h1>
             </div>
             <div className={`feedback ${answered ? "visible" : ""} ${answered && resultCorrect ? "success" : "try-again"}`} aria-live="polite">
@@ -1081,7 +1081,7 @@ export default function Home() {
           <div className="section-title">
             <p className="eyebrow">Achievement collection</p>
             <h1>My Cards</h1>
-            <p>Master each training phase to collect every card from Rookie through Mythic.</p>
+            <p>Master each training level to collect every card from Rookie through Mythic.</p>
           </div>
           <div className="card-collection">
             {CARD_KEYS.map((key) => {
@@ -1103,9 +1103,9 @@ export default function Home() {
                     </div>
                   )}
                   <div className="card-slot-copy">
-                    <span>Phase {card.phase} · {card.rarity}</span>
+                    <span>Level {card.phase} · {card.rarity}</span>
                     <h2>{isUnlocked ? card.title : `${card.rarity} Card`}</h2>
-                    <p>{isUnlocked ? `Phase ${card.phase} mastered` : `Master Phase ${card.phase} to unlock`}</p>
+                    <p>{isUnlocked ? `Level ${card.phase} mastered` : `Master Level ${card.phase} to unlock`}</p>
                   </div>
                 </article>
               );
@@ -1116,7 +1116,7 @@ export default function Home() {
 
       {tab === "help" && (
         <section className="help-page">
-          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master each training phase to unlock a collectible football card. Build your collection from Rookie through Mythic.</p></div>
+          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master each training level to unlock a collectible football card. Build your collection from Rookie through Mythic.</p></div>
           <div className="steps">
             {[
               ["1", "Master Y", "Place Y correctly five times in every formation."],
@@ -1154,7 +1154,7 @@ export default function Home() {
             tabIndex={-1}
             onKeyDown={handleRevealKey}
           >
-            <p className="eyebrow">Phase {CARD_DATA[pendingReveal].phase} mastered!</p>
+            <p className="eyebrow">Level {CARD_DATA[pendingReveal].phase} mastered!</p>
             <div className="reveal-stage">
               <div className="sealed-card"><span>ZYFL</span><b>FOOTBALL CARD</b></div>
               <img src={CARD_DATA[pendingReveal].image} alt={CARD_DATA[pendingReveal].alt} />
@@ -1184,7 +1184,7 @@ export default function Home() {
             onKeyDown={handleDetailKey}
           >
             <div className="card-detail-heading">
-              <div><p className="eyebrow">Phase {CARD_DATA[detailCard].phase} mastered</p><h2 id="card-detail-title">{CARD_DATA[detailCard].title}</h2></div>
+              <div><p className="eyebrow">Level {CARD_DATA[detailCard].phase} mastered</p><h2 id="card-detail-title">{CARD_DATA[detailCard].title}</h2></div>
               <button onClick={closeCardDetail} aria-label="Close card detail">Close</button>
             </div>
             <img src={CARD_DATA[detailCard].image} alt={CARD_DATA[detailCard].alt} />
@@ -1199,9 +1199,9 @@ export default function Home() {
 
 function MasteryTracker({ phase, mastery }: { phase: Phase; mastery: Mastery }) {
   return (
-    <section className="mastery-panel" aria-label={`Phase ${phase} mastery`}>
+    <section className="mastery-panel" aria-label={`Level ${phase} mastery`}>
       <div className="mastery-heading">
-        <div><p className="eyebrow">Phase {phase} progress</p><h2>Formation Mastery</h2></div>
+        <div><p className="eyebrow">Level {phase} progress</p><h2>Formation Mastery</h2></div>
         <span>{FORMATION_NAMES.filter((name) => mastery[name] >= 5).length}/6 mastered</span>
       </div>
       <div className="mastery-grid">
@@ -1221,9 +1221,9 @@ function MasteryTracker({ phase, mastery }: { phase: Phase; mastery: Mastery }) 
 
 function CarrierMasteryTracker({ mastery }: { mastery: CarrierMastery }) {
   return (
-    <section className="mastery-panel" aria-label="Phase 4 ball-carrier mastery">
+    <section className="mastery-panel" aria-label="Level 4 ball-carrier mastery">
       <div className="mastery-heading">
-        <div><p className="eyebrow">Phase 4 progress</p><h2>Ball Carrier Mastery</h2></div>
+        <div><p className="eyebrow">Level 4 progress</p><h2>Ball Carrier Mastery</h2></div>
         <span>{REQUIRED_PHASE4_CARRIERS.filter((carrier) => (mastery[carrier] ?? 0) >= 5).length}/{REQUIRED_PHASE4_CARRIERS.length} mastered</span>
       </div>
       <div className="mastery-grid">
@@ -1244,9 +1244,9 @@ function CarrierMasteryTracker({ mastery }: { mastery: CarrierMastery }) {
 
 function RunLocationMasteryTracker({ mastery }: { mastery: RunLocationMastery }) {
   return (
-    <section className="mastery-panel" aria-label="Phase 5 run-location mastery">
+    <section className="mastery-panel" aria-label="Level 5 run-location mastery">
       <div className="mastery-heading">
-        <div><p className="eyebrow">Phase 5 progress</p><h2>Run Location Mastery</h2></div>
+        <div><p className="eyebrow">Level 5 progress</p><h2>Run Location Mastery</h2></div>
         <span>{REQUIRED_PHASE5_RUN_DIGITS.filter((digit) => (mastery[digit] ?? 0) >= 5).length}/{REQUIRED_PHASE5_RUN_DIGITS.length} mastered</span>
       </div>
       <div className="mastery-grid">
