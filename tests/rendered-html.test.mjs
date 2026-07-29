@@ -36,10 +36,16 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /type Phase = 1 \| 2 \| 3 \| 4/);
   assert.match(page, /BALL_CARRIER_MAP/);
   assert.match(page, /carrierDigitHistory/);
-  assert.match(page, /version:\s*4/);
+  assert.match(page, /version:\s*5/);
+  assert.match(page, /unlockedCards/);
+  assert.match(page, /cardRevealSeen/);
+  assert.match(page, /My Cards/);
+  assert.doesNotMatch(page, /Build My Team/);
   assert.match(page, /role="dialog"/);
   assert.match(page, /aria-modal="true"/);
   assert.match(page, /Who is carrying the ball\?/);
   assert.match(css, /\.quiz-overlay/);
   assert.match(css, /\.ball-carrier/);
+  assert.match(css, /\.card-collection/);
+  assert.match(css, /\.card-reveal/);
 });

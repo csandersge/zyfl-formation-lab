@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Tab = "play" | "team" | "help";
+type Tab = "play" | "cards" | "help";
 type Phase = 1 | 2 | 3 | 4;
 type PlayerLabel = "Y" | "X" | "Z" | "H";
 type ReceiverLabel = "Y" | "X" | "Z";
@@ -15,11 +15,13 @@ type CarrierHistory = Record<CarrierDigit, { correct: number; incorrect: number 
 type HSpot = { c: number; r: number };
 type FormationName = "Right" | "Left" | "Rip" | "Liz" | "Rock" | "Lex";
 type Cell = `${number}-${number}`;
-type HelmetId = "basic" | "stripe" | "wing" | "lightning";
 type Mastery = Record<FormationName, number>;
+type CardKey = "phase1" | "phase2" | "phase3" | "phase4";
+type CardState = Record<CardKey, boolean>;
 
 const FORMATION_NAMES: FormationName[] = ["Right", "Rip", "Rock", "Left", "Liz", "Lex"];
 const EMPTY_MASTERY: Mastery = { Right: 0, Rip: 0, Rock: 0, Left: 0, Liz: 0, Lex: 0 };
+const EMPTY_CARD_STATE: CardState = { phase1: false, phase2: false, phase3: false, phase4: false };
 const H_MODIFIERS: HModifier[] = ["A", "B", "C", "D", "1", "2", "3", "4"];
 const CARRIER_DIGITS: CarrierDigit[] = ["1", "2", "4", "5", "6", "7"];
 const LOCATION_DIGITS: LocationDigit[] = ["0", "1", "4", "5", "6", "7", "8", "9"];
@@ -96,12 +98,36 @@ const FIXED = [
   { label: "RT", row: 1, col: 12 }, { label: "QB", row: 4, col: 10 },
   { label: "F", row: 6, col: 10 },
 ];
-const HELMETS: { id: HelmetId; name: string; cost: number }[] = [
-  { id: "basic", name: "Basic", cost: 0 },
-  { id: "stripe", name: "Stripe", cost: 30 },
-  { id: "wing", name: "Wing", cost: 60 },
-  { id: "lightning", name: "Lightning", cost: 100 },
-];
+const CARD_DATA: Record<CardKey, {
+  phase: Phase;
+  rarity: "Rookie" | "Pro" | "Elite" | "Legendary";
+  title: string;
+  theme: string;
+  image: string;
+  alt: string;
+}> = {
+  phase1: {
+    phase: 1, rarity: "Rookie", title: "Edge Alignment", theme: "Tight End / Y Position",
+    image: "/assets/cards/phase-1-rookie-edge-alignment.png",
+    alt: "Rookie Edge Alignment football card unlocked for mastering Phase 1",
+  },
+  phase2: {
+    phase: 2, rarity: "Pro", title: "Perimeter Playmaker", theme: "Wide Receiver / Y, X, and Z",
+    image: "/assets/cards/phase-2-pro-perimeter-playmaker.png",
+    alt: "Pro Perimeter Playmaker football card unlocked for mastering Phase 2",
+  },
+  phase3: {
+    phase: 3, rarity: "Elite", title: "Hybrid Force", theme: "H-Back",
+    image: "/assets/cards/phase-3-elite-hybrid-force.png",
+    alt: "Elite Hybrid Force football card unlocked for mastering Phase 3",
+  },
+  phase4: {
+    phase: 4, rarity: "Legendary", title: "Ball Carrier Mastery", theme: "Ball Carrier",
+    image: "/assets/cards/phase-4-legendary-ball-carrier-mastery.png",
+    alt: "Legendary Ball Carrier Mastery football card unlocked for mastering Phase 4",
+  },
+};
+const CARD_KEYS = Object.keys(CARD_DATA) as CardKey[];
 
 function clampMastery(value: unknown): number {
   return typeof value === "number" ? Math.max(0, Math.min(5, Math.floor(value))) : 0;
@@ -136,6 +162,15 @@ function readCarrierHistory(value: unknown): CarrierHistory {
 
 function phaseMastered(mastery: Mastery) {
   return FORMATION_NAMES.every((name) => mastery[name] >= 5);
+}
+
+function cardKeyForPhase(phase: Phase): CardKey {
+  return `phase${phase}` as CardKey;
+}
+
+function readCardState(value: unknown): CardState {
+  const source = value && typeof value === "object" ? value as Partial<CardState> : {};
+  return Object.fromEntries(CARD_KEYS.map((key) => [key, Boolean(source[key])])) as CardState;
 }
 
 function yIsRight(formation: FormationName) {
@@ -224,12 +259,14 @@ export default function Home() {
   const [quizChoice, setQuizChoice] = useState<BallCarrier | null>(null);
   const quizRef = useRef<HTMLDivElement>(null);
   const [celebration, setCelebration] = useState<string | null>(null);
-  const [coins, setCoins] = useState(0);
-  const [teamName, setTeamName] = useState("My Team");
-  const [primary, setPrimary] = useState("#18a957");
-  const [secondary, setSecondary] = useState("#f4c542");
-  const [unlocked, setUnlocked] = useState<HelmetId[]>(["basic"]);
-  const [helmet, setHelmet] = useState<HelmetId>("basic");
+  const [unlockedCards, setUnlockedCards] = useState<CardState>(EMPTY_CARD_STATE);
+  const [cardRevealSeen, setCardRevealSeen] = useState<CardState>(EMPTY_CARD_STATE);
+  const [pendingReveal, setPendingReveal] = useState<CardKey | null>(null);
+  const [revealReady, setRevealReady] = useState(false);
+  const [detailCard, setDetailCard] = useState<CardKey | null>(null);
+  const revealRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -241,21 +278,29 @@ export default function Home() {
       const savedP4 = readMastery(saved.phase4Mastery);
       const savedHHistory = readHHistory(saved.hModifierHistory);
       const savedCarrierHistory = readCarrierHistory(saved.carrierDigitHistory);
+      const savedRevealSeen = readCardState(saved.cardRevealSeen);
+      const masteryCards: CardState = {
+        phase1: phaseMastered(savedP1),
+        phase2: phaseMastered(savedP2),
+        phase3: phaseMastered(savedP3),
+        phase4: phaseMastered(savedP4),
+      };
+      const migratedCards = Object.fromEntries(
+        CARD_KEYS.map((key) => [key, masteryCards[key]]),
+      ) as CardState;
       setP1Mastery(savedP1);
       setP2Mastery(savedP2);
       setP3Mastery(savedP3);
       setP4Mastery(savedP4);
       setHHistory(savedHHistory);
       setCarrierHistory(savedCarrierHistory);
+      setUnlockedCards(migratedCards);
+      setCardRevealSeen(savedRevealSeen);
       setPhase2Unlocked(Boolean(saved.phase2Unlocked) || phaseMastered(savedP1));
       setPhase3Unlocked(Boolean(saved.phase3Unlocked) || phaseMastered(savedP2));
       setPhase4Unlocked(Boolean(saved.phase4Unlocked) || phaseMastered(savedP3));
-      if (typeof saved.coins === "number") setCoins(saved.coins);
-      if (typeof saved.teamName === "string") setTeamName(saved.teamName);
-      if (typeof saved.primary === "string") setPrimary(saved.primary);
-      if (typeof saved.secondary === "string") setSecondary(saved.secondary);
-      if (Array.isArray(saved.unlocked)) setUnlocked(saved.unlocked);
-      if (typeof saved.helmet === "string") setHelmet(saved.helmet);
+      const firstUnseen = CARD_KEYS.find((key) => migratedCards[key] && !savedRevealSeen[key]);
+      if (firstUnseen) setPendingReveal(firstUnseen);
       setFormation(pickWeightedFormation(savedP1));
       setHModifier(pickWeightedModifier(savedHHistory));
       const nextCarrier = pickWeightedCarrier(savedCarrierHistory);
@@ -270,7 +315,7 @@ export default function Home() {
   useEffect(() => {
     if (!ready) return;
     localStorage.setItem("zyfl-progress", JSON.stringify({
-      version: 4,
+      version: 5,
       phase1Mastery: p1Mastery,
       phase1Mastered: phaseMastered(p1Mastery),
       phase2Unlocked,
@@ -284,9 +329,10 @@ export default function Home() {
       phase4Mastered: phaseMastered(p4Mastery),
       hModifierHistory: hHistory,
       carrierDigitHistory: carrierHistory,
-      coins, teamName, primary, secondary, unlocked, helmet,
+      unlockedCards,
+      cardRevealSeen,
     }));
-  }, [p1Mastery, p2Mastery, p3Mastery, p4Mastery, phase2Unlocked, phase3Unlocked, phase4Unlocked, hHistory, carrierHistory, coins, teamName, primary, secondary, unlocked, helmet, ready]);
+  }, [p1Mastery, p2Mastery, p3Mastery, p4Mastery, phase2Unlocked, phase3Unlocked, phase4Unlocked, hHistory, carrierHistory, unlockedCards, cardRevealSeen, ready]);
 
   useEffect(() => {
     if (!celebration) return;
@@ -298,6 +344,19 @@ export default function Home() {
     if (!quizOpen) return;
     quizRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
   }, [quizOpen]);
+
+  useEffect(() => {
+    if (!pendingReveal) return;
+    setRevealReady(false);
+    window.setTimeout(() => revealRef.current?.focus(), 0);
+    const timer = window.setTimeout(() => setRevealReady(true), 1600);
+    return () => window.clearTimeout(timer);
+  }, [pendingReveal]);
+
+  useEffect(() => {
+    if (!detailCard) return;
+    window.setTimeout(() => detailRef.current?.querySelector<HTMLButtonElement>("button")?.focus(), 0);
+  }, [detailCard]);
 
   const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : phase === 3 ? p3Mastery : p4Mastery;
   const correctCell = currentPlayer === "H" ? null : FORMATIONS[formation].players[currentPlayer];
@@ -314,7 +373,7 @@ export default function Home() {
   const boardStatus = useMemo(() => {
     if (!answered) return instruction;
     if (resultCorrect) {
-      return phase === 1 ? "Touchdown! You earned 10 coins." : `Formation complete! You earned ${phase === 2 ? 30 : phase === 3 ? 40 : 50} coins.`;
+      return phase === 1 ? "Touchdown! Great alignment." : "Formation complete! Keep building mastery.";
     }
     if (currentPlayer === "H") {
       const side = correctHSpot.c > 10 ? "right" : "left";
@@ -323,9 +382,19 @@ export default function Home() {
     return `The blue ${currentPlayer} shows the correct location. Try a new play when ready.`;
   }, [answered, correctHSpot.c, currentPlayer, formation, hModifier, instruction, phase, resultCorrect]);
 
+  function unlockCard(targetPhase: Phase) {
+    const key = cardKeyForPhase(targetPhase);
+    setUnlockedCards((current) => {
+      if (current[key]) return current;
+      setPendingReveal(key);
+      return { ...current, [key]: true };
+    });
+  }
+
   function recordMastery(targetPhase: Phase) {
     if (targetPhase === 1) {
       setP1Mastery((current) => {
+        const phaseWasMastered = phaseMastered(current);
         const wasMastered = current[formation] >= 5;
         const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
         if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered!`);
@@ -333,10 +402,12 @@ export default function Home() {
           setPhase2Unlocked(true);
           setCelebration("Phase 2 unlocked! Now place Y, X, and Z.");
         }
+        if (!phaseWasMastered && phaseMastered(next)) unlockCard(1);
         return next;
       });
     } else if (targetPhase === 2) {
       setP2Mastery((current) => {
+        const phaseWasMastered = phaseMastered(current);
         const wasMastered = current[formation] >= 5;
         const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
         if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 2!`);
@@ -344,10 +415,12 @@ export default function Home() {
           setPhase3Unlocked(true);
           setCelebration("Phase 3 unlocked! Letters follow Y; numbers go away from Y.");
         }
+        if (!phaseWasMastered && phaseMastered(next)) unlockCard(2);
         return next;
       });
     } else if (targetPhase === 3) {
       setP3Mastery((current) => {
+        const phaseWasMastered = phaseMastered(current);
         const wasMastered = current[formation] >= 5;
         const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
         if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 3!`);
@@ -355,13 +428,16 @@ export default function Home() {
           setPhase4Unlocked(true);
           setCelebration("Phase 4 unlocked! The first run-number digit names the ball carrier.");
         }
+        if (!phaseWasMastered && phaseMastered(next)) unlockCard(3);
         return next;
       });
     } else {
       setP4Mastery((current) => {
+        const phaseWasMastered = phaseMastered(current);
         const wasMastered = current[formation] >= 5;
         const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
         if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 4!`);
+        if (!phaseWasMastered && phaseMastered(next)) unlockCard(4);
         return next;
       });
     }
@@ -379,7 +455,6 @@ export default function Home() {
       return;
     }
 
-    setCoins((value) => value + 10);
     setResultCorrect(true);
 
     if (phase === 1) {
@@ -413,7 +488,6 @@ export default function Home() {
       },
     }));
     if (correct) {
-      setCoins((value) => value + 10);
       if (phase === 4) {
         setResultCorrect(null);
         setQuizOpen(true);
@@ -441,7 +515,6 @@ export default function Home() {
       },
     }));
     if (correct) {
-      setCoins((value) => value + 10);
       recordMastery(4);
     }
   }
@@ -515,15 +588,65 @@ export default function Home() {
       : null;
   }
 
-  function unlockHelmet(id: HelmetId, cost: number) {
-    if (unlocked.includes(id)) {
-      setHelmet(id);
+  function finishReveal(viewCollection: boolean) {
+    if (!pendingReveal) return;
+    setCardRevealSeen((current) => ({ ...current, [pendingReveal]: true }));
+    setPendingReveal(null);
+    if (viewCollection) setTab("cards");
+    window.setTimeout(() => returnFocusRef.current?.focus(), 0);
+  }
+
+  function openCard(key: CardKey, trigger: HTMLElement) {
+    returnFocusRef.current = trigger;
+    if (!cardRevealSeen[key]) {
+      setPendingReveal(key);
+    } else {
+      setDetailCard(key);
+    }
+  }
+
+  function closeCardDetail() {
+    setDetailCard(null);
+    window.setTimeout(() => returnFocusRef.current?.focus(), 0);
+  }
+
+  function handleDetailKey(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCardDetail();
       return;
     }
-    if (coins < cost) return;
-    setCoins((value) => value - cost);
-    setUnlocked((items) => [...items, id]);
-    setHelmet(id);
+    if (event.key !== "Tab") return;
+    const buttons = Array.from(detailRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+    if (!buttons.length) return;
+    if (event.shiftKey && document.activeElement === buttons[0]) {
+      event.preventDefault();
+      buttons[buttons.length - 1].focus();
+    } else if (!event.shiftKey && document.activeElement === buttons[buttons.length - 1]) {
+      event.preventDefault();
+      buttons[0].focus();
+    }
+  }
+
+  function handleRevealKey(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const buttons = Array.from(revealRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+    if (!buttons.length) {
+      event.preventDefault();
+      revealRef.current?.focus();
+      return;
+    }
+    if (event.shiftKey && document.activeElement === buttons[0]) {
+      event.preventDefault();
+      buttons[buttons.length - 1].focus();
+    } else if (!event.shiftKey && document.activeElement === buttons[buttons.length - 1]) {
+      event.preventDefault();
+      buttons[0].focus();
+    }
   }
 
   return (
@@ -534,13 +657,15 @@ export default function Home() {
           <span><b>ZYFL</b><small>FORMATION LAB</small></span>
         </button>
         <nav aria-label="Main navigation">
-          {(["play", "team", "help"] as Tab[]).map((item) => (
+          {(["play", "cards", "help"] as Tab[]).map((item) => (
             <button key={item} className={tab === item ? "nav-active" : ""} onClick={() => setTab(item)}>
-              {item === "play" ? "Play" : item === "team" ? "My Team" : "How to Play"}
+              {item === "play" ? "Play" : item === "cards" ? "My Cards" : "How to Play"}
             </button>
           ))}
         </nav>
-        <div className="coin-balance" aria-label={`${coins} coins`}><span>●</span> {coins}</div>
+        <button className="collection-count" onClick={() => setTab("cards")} aria-label={`${CARD_KEYS.filter((key) => unlockedCards[key]).length} of 4 cards unlocked`}>
+          <span>★</span> {CARD_KEYS.filter((key) => unlockedCards[key]).length}/4
+        </button>
       </header>
 
       {tab === "play" && (
@@ -550,18 +675,22 @@ export default function Home() {
           <div className="phase-selector" aria-label="Training phase">
             <button className={phase === 1 ? "phase-active" : ""} onClick={() => choosePhase(1)}>
               <span>Phase 1</span><b>Place Y</b>
+              <small className="phase-reward">{unlockedCards.phase1 ? "Card Unlocked ✓" : "Reward: Rookie Football Card"}</small>
             </button>
             <button className={phase === 2 ? "phase-active" : ""} onClick={() => choosePhase(2)} disabled={!phase2Unlocked}>
               <span>Phase 2 {phase2Unlocked ? "✓" : "🔒"}</span><b>Place Y, X & Z</b>
               {!phase2Unlocked && <small>Master all six formations to unlock</small>}
+              <small className="phase-reward">{unlockedCards.phase2 ? "Card Unlocked ✓" : "Reward: Pro Football Card"}</small>
             </button>
             <button className={phase === 3 ? "phase-active" : ""} onClick={() => choosePhase(3)} disabled={!phase3Unlocked}>
               <span>Phase 3 {phase3Unlocked ? "✓" : "🔒"}</span><b>Add the H back</b>
               {!phase3Unlocked && <small>Master Phase 2 to unlock H-back training</small>}
+              <small className="phase-reward">{unlockedCards.phase3 ? "Card Unlocked ✓" : "Reward: Elite Football Card"}</small>
             </button>
             <button className={phase === 4 ? "phase-active" : ""} onClick={() => choosePhase(4)} disabled={!phase4Unlocked}>
               <span>Phase 4 {phase4Unlocked ? "✓" : "🔒"}</span><b>Identify the Ball Carrier</b>
               {!phase4Unlocked && <small>Master all six formations in Phase 3 to unlock ball-carrier training</small>}
+              <small className="phase-reward">{unlockedCards.phase4 ? "Card Unlocked ✓" : "Reward: Legendary Football Card"}</small>
             </button>
           </div>
 
@@ -684,44 +813,47 @@ export default function Home() {
         </section>
       )}
 
-      {tab === "team" && (
-        <section className="team-page">
-          <div className="section-title"><p className="eyebrow">Locker room</p><h1>Build My Team</h1><p>Train hard. Earn coins. Make this team yours.</p></div>
-          <div className="team-layout">
-            <div className="team-preview" style={{ "--primary": primary, "--secondary": secondary } as React.CSSProperties}>
-              <p>LIVE PREVIEW</p>
-              <Helmet design={helmet} />
-              <h2>{teamName || "My Team"}</h2>
-              <span className="team-tag">FORMATION READY</span>
-            </div>
-            <div className="customizer">
-              <label>Team name<input value={teamName} maxLength={22} onChange={(event) => setTeamName(event.target.value)} /></label>
-              <div className="color-row">
-                <label>Primary color<input type="color" value={primary} onChange={(event) => setPrimary(event.target.value)} /></label>
-                <label>Secondary color<input type="color" value={secondary} onChange={(event) => setSecondary(event.target.value)} /></label>
-              </div>
-              <h2>Helmet Locker</h2>
-              <div className="helmet-grid">
-                {HELMETS.map((item) => {
-                  const owned = unlocked.includes(item.id);
-                  const affordable = coins >= item.cost;
-                  return (
-                    <button key={item.id} className={`helmet-card ${helmet === item.id ? "equipped" : ""}`} onClick={() => unlockHelmet(item.id, item.cost)} disabled={!owned && !affordable}>
-                      <span className="mini-helmet" style={{ "--primary": primary, "--secondary": secondary } as React.CSSProperties}><Helmet design={item.id} small /></span>
-                      <b>{item.name}</b>
-                      <small>{owned ? (helmet === item.id ? "Equipped" : "Owned") : `● ${item.cost}`}</small>
+      {tab === "cards" && (
+        <section className="cards-page">
+          <div className="section-title">
+            <p className="eyebrow">Achievement collection</p>
+            <h1>My Cards</h1>
+            <p>Master each training phase to collect every card from Rookie through Legendary.</p>
+          </div>
+          <div className="card-collection">
+            {CARD_KEYS.map((key) => {
+              const card = CARD_DATA[key];
+              const isUnlocked = unlockedCards[key];
+              const isNew = isUnlocked && !cardRevealSeen[key];
+              return (
+                <article key={key} className={`card-slot rarity-${card.rarity.toLowerCase()} ${isUnlocked ? "unlocked" : "locked"}`}>
+                  {isUnlocked ? (
+                    <button className="card-art-button" onClick={(event) => openCard(key, event.currentTarget)}>
+                      <img src={card.image} alt={card.alt} loading="lazy" />
+                      <span className="card-status">{isNew ? "New Card!" : "Unlocked ✓"}</span>
                     </button>
-                  );
-                })}
-              </div>
-            </div>
+                  ) : (
+                    <div className="card-back" aria-label={`${card.rarity} card locked`}>
+                      <span className="lock-icon" aria-hidden="true">🔒</span>
+                      <b>{card.rarity}</b>
+                      <small>Football Card</small>
+                    </div>
+                  )}
+                  <div className="card-slot-copy">
+                    <span>Phase {card.phase} · {card.rarity}</span>
+                    <h2>{isUnlocked ? card.title : `${card.rarity} Card`}</h2>
+                    <p>{isUnlocked ? `Phase ${card.phase} mastered` : `Master Phase ${card.phase} to unlock`}</p>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       )}
 
       {tab === "help" && (
         <section className="help-page">
-          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master the formation, add the H back, and identify the ball carrier.</p></div>
+          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master each training phase to unlock a collectible football card. Build your collection from Rookie through Legendary.</p></div>
           <div className="steps">
             {[
               ["1", "Master Y", "Place Y correctly five times in every formation."],
@@ -741,8 +873,60 @@ export default function Home() {
             <p className="memory-tip"><b>Memory tip:</b> Right-side formations start with R. Left-side formations start with L.</p>
             <p className="memory-tip h-rule"><b>H-back rule:</b> A, B, C, and D place H on the same side as Y. 1, 2, 3, and 4 place H away from Y.</p>
             <p className="memory-tip carrier-rule"><b>Ball-carrier rule:</b> 1 = QB, 2 = F, 4 = H, 5 = Y, 6 = X, and 7 = Z.</p>
+            <div className="rarity-guide" aria-label="Football card rarity levels">
+              {CARD_KEYS.map((key) => <span key={key} className={`rarity-${CARD_DATA[key].rarity.toLowerCase()}`}>{CARD_DATA[key].rarity}</span>)}
+            </div>
           </div>
         </section>
+      )}
+
+      {pendingReveal && (
+        <div className="card-modal-backdrop">
+          <div
+            ref={revealRef}
+            className={`card-reveal rarity-${CARD_DATA[pendingReveal].rarity.toLowerCase()} ${revealReady ? "revealed" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="card-reveal-title"
+            tabIndex={-1}
+            onKeyDown={handleRevealKey}
+          >
+            <p className="eyebrow">Phase {CARD_DATA[pendingReveal].phase} mastered!</p>
+            <div className="reveal-stage">
+              <div className="sealed-card"><span>ZYFL</span><b>FOOTBALL CARD</b></div>
+              <img src={CARD_DATA[pendingReveal].image} alt={CARD_DATA[pendingReveal].alt} />
+            </div>
+            <h2 id="card-reveal-title">{revealReady ? "New Card Unlocked!" : "Opening your reward…"}</h2>
+            {revealReady && (
+              <>
+                <p>{CARD_DATA[pendingReveal].rarity} · {CARD_DATA[pendingReveal].title}</p>
+                <button className="primary-button" onClick={() => finishReveal(true)}>View My Cards</button>
+                <button className="secondary-button" onClick={() => finishReveal(false)}>Keep Playing</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {detailCard && (
+        <div className="card-modal-backdrop detail-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeCardDetail();
+        }}>
+          <div
+            ref={detailRef}
+            className="card-detail"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="card-detail-title"
+            onKeyDown={handleDetailKey}
+          >
+            <div className="card-detail-heading">
+              <div><p className="eyebrow">Phase {CARD_DATA[detailCard].phase} mastered</p><h2 id="card-detail-title">{CARD_DATA[detailCard].title}</h2></div>
+              <button onClick={closeCardDetail} aria-label="Close card detail">Close</button>
+            </div>
+            <img src={CARD_DATA[detailCard].image} alt={CARD_DATA[detailCard].alt} />
+          </div>
+        </div>
       )}
 
       <footer>ZYFL Formation Lab · Formation & H-Back Mastery</footer>
@@ -769,14 +953,5 @@ function MasteryTracker({ phase, mastery }: { phase: Phase; mastery: Mastery }) 
         })}
       </div>
     </section>
-  );
-}
-
-function Helmet({ design, small = false }: { design: HelmetId; small?: boolean }) {
-  return (
-    <div className={`helmet helmet-${design} ${small ? "helmet-small" : ""}`} aria-label={`${design} helmet preview`}>
-      <span className="helmet-mark">{design === "wing" ? "≋" : design === "lightning" ? "ϟ" : ""}</span>
-      <span className="face-mask" />
-    </div>
   );
 }
