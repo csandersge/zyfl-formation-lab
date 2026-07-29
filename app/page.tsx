@@ -473,9 +473,8 @@ export default function Home() {
                     onClick={() => chooseHSpot(spot.modifier)}
                     disabled={answered || currentPlayer !== "H"}
                     data-active={currentPlayer === "H"}
-                    aria-label={`Place H at ${spot.modifier}`}
+                    aria-label="Place H at this location"
                   >
-                    <small>{spot.modifier}</small>
                     {showMarker && <span className={`player skill-player player-h ${correctHere ? "revealed-player" : ""}`}>H</span>}
                   </button>
                 );
