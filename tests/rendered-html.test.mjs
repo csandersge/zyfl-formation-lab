@@ -42,6 +42,8 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /My Cards/);
   assert.doesNotMatch(page, /image:\s*"\/assets\/cards\//);
   assert.doesNotMatch(page, /Build My Team/);
+  assert.doesNotMatch(page, /"5", "Name the carrier"/);
+  assert.doesNotMatch(page, /"Unlock Phase 2"/);
   assert.match(page, /role="dialog"/);
   assert.match(page, /aria-modal="true"/);
   assert.match(page, /Who is carrying the ball\?/);

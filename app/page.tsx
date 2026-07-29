@@ -857,10 +857,9 @@ export default function Home() {
           <div className="steps">
             {[
               ["1", "Master Y", "Place Y correctly five times in every formation."],
-              ["2", "Unlock Phase 2", "Master all six formations to unlock Y, X, and Z."],
-              ["3", "Build the formation", "In Phase 2, place Y, then X, then Z."],
-              ["4", "Add H", "Letters follow Y. Numbers send H away from Y."],
-              ["5", "Name the carrier", "The first run-number digit tells who carries the ball."],
+              ["2", "Build the formation", "Place Y, then X, then Z in all six formations."],
+              ["3", "Add H", "Letters follow Y. Numbers send H away from Y."],
+              ["4", "Name the carrier", "The first run-number digit tells who carries the ball."],
             ].map(([number, title, copy]) => <article key={number}><span>{number}</span><h2>{title}</h2><p>{copy}</p></article>)}
           </div>
           <div className="reference">
