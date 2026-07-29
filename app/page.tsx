@@ -82,11 +82,13 @@ const APPROVED_RUN_PLAYS: ApprovedRunPlay[] = [
   { id: "rip-3-28", displayCall: "Rip 3 28", formation: "Rip", hModifier: "3", displayedRunNumber: "28", carrier: "F", runLocationDigit: "8", concept: "Outside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
   { id: "rip-3-48-reverse-right", displayCall: "Rip 3 48 Reverse Right", formation: "Rip", hModifier: "3", displayedRunNumber: "48", carrier: "H", runLocationDigit: "8", concept: "Outside Zone Right", specialType: "reverse", activePhase4: true, activePhase5: true },
 ];
+const ACTIVE_PHASE4_PLAYS = APPROVED_RUN_PLAYS.filter((play) => play.activePhase4);
+const ACTIVE_PHASE5_PLAYS = APPROVED_RUN_PLAYS.filter((play) => play.activePhase5);
 const REQUIRED_PHASE4_CARRIERS = BALL_CARRIERS.filter((carrier) =>
-  APPROVED_RUN_PLAYS.some((play) => play.activePhase4 && play.carrier === carrier),
+  ACTIVE_PHASE4_PLAYS.some((play) => play.carrier === carrier),
 );
 const REQUIRED_PHASE5_RUN_DIGITS = LOCATION_DIGITS.filter((digit) =>
-  APPROVED_RUN_PLAYS.some((play) => play.activePhase5 && play.runLocationDigit === digit),
+  ACTIVE_PHASE5_PLAYS.some((play) => play.runLocationDigit === digit),
 );
 const EMPTY_PHASE4_CARRIER_MASTERY = Object.fromEntries(
   REQUIRED_PHASE4_CARRIERS.map((carrier) => [carrier, 0]),
@@ -262,12 +264,37 @@ function phaseMastered(mastery: Mastery) {
   return FORMATION_NAMES.every((name) => mastery[name] >= 5);
 }
 
+function getDynamicMasteryTarget(playCount: number) {
+  if (playCount >= 3) return 5;
+  if (playCount === 2) return 4;
+  if (playCount === 1) return 3;
+  return 0;
+}
+
+function getLevel4MasteryTarget(carrier: BallCarrier, activePlays = ACTIVE_PHASE4_PLAYS) {
+  const playCount = new Set(
+    activePlays.filter((play) => play.carrier === carrier).map((play) => play.id),
+  ).size;
+  return getDynamicMasteryTarget(playCount);
+}
+
+function getLevel5MasteryTarget(digit: LocationDigit, activePlays = ACTIVE_PHASE5_PLAYS) {
+  const playCount = new Set(
+    activePlays.filter((play) => play.runLocationDigit === digit).map((play) => play.id),
+  ).size;
+  return getDynamicMasteryTarget(playCount);
+}
+
 function phase4Mastered(mastery: CarrierMastery) {
-  return REQUIRED_PHASE4_CARRIERS.every((carrier) => (mastery[carrier] ?? 0) >= 5);
+  return REQUIRED_PHASE4_CARRIERS.every(
+    (carrier) => (mastery[carrier] ?? 0) >= getLevel4MasteryTarget(carrier),
+  );
 }
 
 function phase5Mastered(mastery: RunLocationMastery) {
-  return REQUIRED_PHASE5_RUN_DIGITS.every((digit) => (mastery[digit] ?? 0) >= 5);
+  return REQUIRED_PHASE5_RUN_DIGITS.every(
+    (digit) => (mastery[digit] ?? 0) >= getLevel5MasteryTarget(digit),
+  );
 }
 
 function cardKeyForPhase(phase: CardPhase): CardKey {
@@ -333,20 +360,52 @@ function pickApprovedRunPlay(
   previousFormation?: FormationName,
   formationRepeatCount = 0,
 ) {
-  const eligible = APPROVED_RUN_PLAYS.filter((play) => phase === 4 ? play.activePhase4 : play.activePhase5);
-  let candidates = eligible.filter((play) => !(play.id === previousPlayId && playRepeatCount >= 2));
+  const eligible = phase === 4 ? ACTIVE_PHASE4_PLAYS : ACTIVE_PHASE5_PLAYS;
+  const incompleteCategories = phase === 4
+    ? REQUIRED_PHASE4_CARRIERS
+      .map((carrier) => ({
+        category: carrier,
+        score: carrierMastery[carrier] ?? 0,
+        target: getLevel4MasteryTarget(carrier, eligible),
+      }))
+      .filter(({ score, target }) => score < target)
+    : REQUIRED_PHASE5_RUN_DIGITS
+      .map((digit) => ({
+        category: digit,
+        score: runLocationMastery[digit] ?? 0,
+        target: getLevel5MasteryTarget(digit, eligible),
+      }))
+      .filter(({ score, target }) => score < target);
+
+  let candidates = eligible;
+  if (incompleteCategories.length) {
+    const lowestProgressRatio = Math.min(
+      ...incompleteCategories.map(({ score, target }) => score / target),
+    );
+    const priorityCategories = new Set(
+      incompleteCategories
+        .filter(({ score, target }) => score / target === lowestProgressRatio)
+        .map(({ category }) => category),
+    );
+    candidates = eligible.filter((play) =>
+      phase === 4
+        ? priorityCategories.has(play.carrier)
+        : priorityCategories.has(play.runLocationDigit),
+    );
+  }
+
+  const differentPlay = candidates.filter((play) => play.id !== previousPlayId);
+  if (differentPlay.length) {
+    candidates = differentPlay;
+  } else if (playRepeatCount >= 2) {
+    candidates = candidates.length ? candidates : eligible;
+  }
   const withoutRepeatedFormation = candidates.filter(
     (play) => !(play.formation === previousFormation && formationRepeatCount >= 2),
   );
   if (withoutRepeatedFormation.length) candidates = withoutRepeatedFormation;
 
-  const pool = candidates.flatMap((play) => {
-    const weight = phase === 4
-      ? Math.max(1, 6 - (carrierMastery[play.carrier] ?? 0))
-      : Math.max(1, 6 - (runLocationMastery[play.runLocationDigit] ?? 0));
-    return Array.from({ length: weight }, () => play);
-  });
-  return pool[Math.floor(Math.random() * pool.length)] ?? eligible[0];
+  return candidates[Math.floor(Math.random() * candidates.length)] ?? eligible[0];
 }
 
 export default function Home() {
@@ -654,9 +713,10 @@ export default function Home() {
     } else if (targetPhase === 4) {
       setPhase4CarrierMastery((current) => {
         const phaseWasMastered = phase4Mastered(current);
-        const wasMastered = (current[ballCarrier] ?? 0) >= 5;
+        const target = getLevel4MasteryTarget(ballCarrier);
+        const wasMastered = (current[ballCarrier] ?? 0) >= target;
         const next = { ...current, [ballCarrier]: Math.min(5, (current[ballCarrier] ?? 0) + 1) };
-        if (!wasMastered && next[ballCarrier] === 5) setCelebration(`${ballCarrier} mastered in Level 4!`);
+        if (!wasMastered && (next[ballCarrier] ?? 0) >= target) setCelebration(`${ballCarrier} mastered in Level 4!`);
         if (!phase5Unlocked && phase4Mastered(next)) {
           setPhase5Unlocked(true);
           setCelebration("Level 5 unlocked! The second digit tells where the runner is going.");
@@ -667,9 +727,10 @@ export default function Home() {
     } else {
       setPhase5RunLocationMastery((current) => {
         const phaseWasMastered = phase5Mastered(current);
-        const wasMastered = (current[locationDigit] ?? 0) >= 5;
+        const target = getLevel5MasteryTarget(locationDigit);
+        const wasMastered = (current[locationDigit] ?? 0) >= target;
         const next = { ...current, [locationDigit]: Math.min(5, (current[locationDigit] ?? 0) + 1) };
-        if (!wasMastered && next[locationDigit] === 5) setCelebration(`${locationDigit} · ${selectedRunPlay.concept} mastered in Level 5!`);
+        if (!wasMastered && (next[locationDigit] ?? 0) >= target) setCelebration(`${locationDigit} · ${selectedRunPlay.concept} mastered in Level 5!`);
         if (!phaseWasMastered && phase5Mastered(next)) handleLevelMastery(5);
         return next;
       });
@@ -1289,20 +1350,25 @@ function MasteryTracker({ phase, mastery }: { phase: Phase; mastery: Mastery }) 
 }
 
 function CarrierMasteryTracker({ mastery }: { mastery: CarrierMastery }) {
+  const masteredCount = REQUIRED_PHASE4_CARRIERS.filter(
+    (carrier) => (mastery[carrier] ?? 0) >= getLevel4MasteryTarget(carrier),
+  ).length;
   return (
     <section className="mastery-panel" aria-label="Level 4 ball-carrier mastery">
       <div className="mastery-heading">
         <div><p className="eyebrow">Level 4 progress</p><h2>Ball Carrier Mastery</h2></div>
-        <span>{REQUIRED_PHASE4_CARRIERS.filter((carrier) => (mastery[carrier] ?? 0) >= 5).length}/{REQUIRED_PHASE4_CARRIERS.length} mastered</span>
+        <span>{masteredCount}/{REQUIRED_PHASE4_CARRIERS.length} mastered</span>
       </div>
       <div className="mastery-grid">
         {REQUIRED_PHASE4_CARRIERS.map((carrier) => {
           const count = mastery[carrier] ?? 0;
-          const complete = count >= 5;
+          const target = getLevel4MasteryTarget(carrier);
+          const displayedCount = Math.min(count, target);
+          const complete = count >= target;
           return (
             <div key={carrier} className={`mastery-item ${complete ? "mastered" : ""}`}>
-              <div><b>{complete ? "✓ " : ""}{carrier}</b><span>{complete ? "Mastered" : `${count}/5`}</span></div>
-              <i><span style={{ width: `${count * 20}%` }} /></i>
+              <div><b>{complete ? "✓ " : ""}{carrier}</b><span>{displayedCount}/{target}{complete ? " · Mastered" : ""}</span></div>
+              <i><span style={{ width: `${target ? (displayedCount / target) * 100 : 0}%` }} /></i>
             </div>
           );
         })}
@@ -1312,21 +1378,26 @@ function CarrierMasteryTracker({ mastery }: { mastery: CarrierMastery }) {
 }
 
 function RunLocationMasteryTracker({ mastery }: { mastery: RunLocationMastery }) {
+  const masteredCount = REQUIRED_PHASE5_RUN_DIGITS.filter(
+    (digit) => (mastery[digit] ?? 0) >= getLevel5MasteryTarget(digit),
+  ).length;
   return (
     <section className="mastery-panel" aria-label="Level 5 run-location mastery">
       <div className="mastery-heading">
         <div><p className="eyebrow">Level 5 progress</p><h2>Run Location Mastery</h2></div>
-        <span>{REQUIRED_PHASE5_RUN_DIGITS.filter((digit) => (mastery[digit] ?? 0) >= 5).length}/{REQUIRED_PHASE5_RUN_DIGITS.length} mastered</span>
+        <span>{masteredCount}/{REQUIRED_PHASE5_RUN_DIGITS.length} mastered</span>
       </div>
       <div className="mastery-grid">
         {REQUIRED_PHASE5_RUN_DIGITS.map((digit) => {
           const count = mastery[digit] ?? 0;
-          const complete = count >= 5;
+          const target = getLevel5MasteryTarget(digit);
+          const displayedCount = Math.min(count, target);
+          const complete = count >= target;
           const location = RUN_LOCATION_MAP[digit];
           return (
             <div key={digit} className={`mastery-item ${complete ? "mastered" : ""}`}>
-              <div><b>{complete ? "✓ " : ""}{digit} · {location.concept} {location.side}</b><span>{complete ? "Mastered" : `${count}/5`}</span></div>
-              <i><span style={{ width: `${count * 20}%` }} /></i>
+              <div><b>{complete ? "✓ " : ""}{digit} · {location.concept} {location.side}</b><span>{displayedCount}/{target}{complete ? " · Mastered" : ""}</span></div>
+              <i><span style={{ width: `${target ? (displayedCount / target) * 100 : 0}%` }} /></i>
             </div>
           );
         })}

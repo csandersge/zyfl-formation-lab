@@ -43,7 +43,7 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /carrier: "QB".*specialType: "qb-keep"/);
   assert.match(page, /displayCall: "Left C Fake 21 QB Keep Right".*displayedRunNumber: "21".*carrier: "QB".*runLocationDigit: "8".*concept: "Outside Zone Right"/);
   assert.match(page, /displayCall: "Right C Fake 20 QB Keep Left".*displayedRunNumber: "20".*carrier: "QB".*runLocationDigit: "9".*concept: "Outside Zone Left"/);
-  assert.match(page, /runLocationMastery\[play\.runLocationDigit\]/);
+  assert.match(page, /runLocationMastery\[digit\]/);
   assert.match(page, /locationDigit = selectedRunPlay\.runLocationDigit/);
   assert.match(page, /id: "rip-3-48-reverse-right".*carrier: "H"/);
   assert.doesNotMatch(page, /pickWeightedCarrier|pickWeightedLocation|makeRunNumber/);
@@ -62,6 +62,18 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /phase5RunLocationMastery/);
   assert.match(page, /REQUIRED_PHASE4_CARRIERS/);
   assert.match(page, /REQUIRED_PHASE5_RUN_DIGITS/);
+  assert.match(page, /function getDynamicMasteryTarget\(playCount: number\)/);
+  assert.match(page, /if \(playCount >= 3\) return 5/);
+  assert.match(page, /if \(playCount === 2\) return 4/);
+  assert.match(page, /if \(playCount === 1\) return 3/);
+  assert.match(page, /function getLevel4MasteryTarget\(carrier: BallCarrier/);
+  assert.match(page, /function getLevel5MasteryTarget\(digit: LocationDigit/);
+  assert.match(page, /new Set\([\s\S]*?map\(\(play\) => play\.id\)/);
+  assert.match(page, /const lowestProgressRatio = Math\.min/);
+  assert.match(page, /score \/ target === lowestProgressRatio/);
+  assert.match(page, /priorityCategories\.has\(play\.runLocationDigit\)/);
+  assert.match(page, /const differentPlay = candidates\.filter\(\(play\) => play\.id !== previousPlayId\)/);
+  assert.doesNotMatch(page, /Math\.max\(1, 6 - \(carrierMastery/);
   assert.match(page, /Ball Carrier Mastery/);
   assert.match(page, /Run Location Mastery/);
   assert.match(page, /type CardPhase = 1 \| 2 \| 3 \| 4 \| 5/);
