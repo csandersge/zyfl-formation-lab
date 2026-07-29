@@ -39,10 +39,12 @@ nav button:hover, nav button.nav-active { color: white; background: rgba(255,255
 .phase-selector span { color: var(--green-bright); font-size: 10px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .phase-selector b { font-size: 15px; }
 .phase-selector small { color: var(--muted); font-size: 10px; }
-.play-heading { display: grid; grid-template-columns: minmax(150px, .55fr) minmax(420px, 2fr) auto; align-items: center; gap: 22px; margin-bottom: 18px; }
+.play-heading { display: grid; grid-template-columns: minmax(240px, .75fr) minmax(360px, 1.6fr) auto; align-items: center; gap: 22px; margin-bottom: 18px; }
 .eyebrow { margin: 0 0 4px; color: var(--green-bright); font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .18em; }
 h1, h2, p { margin-top: 0; }
-.play-heading h1, .section-title h1 { font-size: clamp(38px, 6vw, 68px); line-height: .95; margin: 0; letter-spacing: -.045em; text-transform: uppercase; }
+.play-heading h1, .section-title h1 { line-height: .95; margin: 0; letter-spacing: -.045em; text-transform: uppercase; }
+.play-heading h1 { font-size: clamp(36px, 5vw, 56px); white-space: nowrap; }
+.section-title h1 { font-size: clamp(38px, 6vw, 68px); }
 .challenge-chip { display: flex; align-items: center; gap: 9px; font-weight: 800; color: var(--muted); }
 .challenge-chip span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: white; background: var(--blue); }
 .board-wrap { border-radius: 22px; background: linear-gradient(180deg, #173c32, #0d3027); padding: 14px 18px 20px; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 22px 60px rgba(0,0,0,.3), inset 0 0 50px rgba(0,0,0,.18); overflow: hidden; position: relative; }
@@ -171,6 +173,7 @@ footer { border-top: 1px solid var(--line); padding: 18px; color: #78909f; text-
   .celebration { top: 128px; width: max-content; max-width: calc(100% - 24px); text-align: center; }
   .phase-selector { margin-bottom: 20px; }
   .play-heading { grid-template-columns: 1fr auto; grid-template-areas: "call challenge" "feedback feedback"; gap: 12px; align-items: center; }
+  .play-heading h1 { font-size: clamp(34px, 10vw, 48px); }
   .play-call { grid-area: call; }
   .challenge-chip { grid-area: challenge; font-size: 12px; }
   .feedback { grid-area: feedback; align-items: center; flex-wrap: nowrap; }
