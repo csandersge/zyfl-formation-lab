@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 type Tab = "play" | "cards" | "help";
 type Phase = 1 | 2 | 3 | 4 | 5;
-type CardPhase = 1 | 2 | 3 | 4;
+type CardPhase = 1 | 2 | 3 | 4 | 5;
 type PlayerLabel = "Y" | "X" | "Z" | "H";
 type ReceiverLabel = "Y" | "X" | "Z";
 type BallCarrier = "QB" | "F" | "H" | "Y" | "X" | "Z";
@@ -20,7 +20,7 @@ type HSpot = { c: number; r: number };
 type FormationName = "Right" | "Left" | "Rip" | "Liz" | "Rock" | "Lex";
 type Cell = `${number}-${number}`;
 type Mastery = Record<FormationName, number>;
-type CardKey = "phase1" | "phase2" | "phase3" | "phase4";
+type CardKey = "phase1" | "phase2" | "phase3" | "phase4" | "phase5";
 type CardState = Record<CardKey, boolean>;
 type SpecialPlayType = "power" | "sweep" | "qb-keep" | "reverse" | "empty-sweep" | null;
 type ApprovedRunPlay = {
@@ -39,7 +39,7 @@ type ApprovedRunPlay = {
 
 const FORMATION_NAMES: FormationName[] = ["Right", "Rip", "Rock", "Left", "Liz", "Lex"];
 const EMPTY_MASTERY: Mastery = { Right: 0, Rip: 0, Rock: 0, Left: 0, Liz: 0, Lex: 0 };
-const EMPTY_CARD_STATE: CardState = { phase1: false, phase2: false, phase3: false, phase4: false };
+const EMPTY_CARD_STATE: CardState = { phase1: false, phase2: false, phase3: false, phase4: false, phase5: false };
 const H_MODIFIERS: HModifier[] = ["A", "B", "C", "D", "1", "2", "3", "4"];
 const CARRIER_DIGITS: CarrierDigit[] = ["1", "2", "4", "5", "6", "7"];
 const LOCATION_DIGITS: LocationDigit[] = ["0", "1", "4", "5", "6", "7", "8", "9"];
@@ -166,7 +166,7 @@ const FIXED = [
 ];
 const CARD_DATA: Record<CardKey, {
   phase: CardPhase;
-  rarity: "Rookie" | "Pro" | "Elite" | "Legendary";
+  rarity: "Rookie" | "Pro" | "Elite" | "Legendary" | "Mythic";
   title: string;
   theme: string;
   image: string;
@@ -191,6 +191,11 @@ const CARD_DATA: Record<CardKey, {
     phase: 4, rarity: "Legendary", title: "Ball Carrier Mastery", theme: "Ball Carrier",
     image: "assets/cards/phase-4-legendary-ball-carrier-mastery.png",
     alt: "Legendary Ball Carrier Mastery football card unlocked for mastering Phase 4",
+  },
+  phase5: {
+    phase: 5, rarity: "Mythic", title: "Lane Finder", theme: "Mastered run locations",
+    image: "assets/cards/lane-finder.png",
+    alt: "Lane Finder Mythic football reward card unlocked for mastering Phase 5",
   },
 };
 const CARD_KEYS = Object.keys(CARD_DATA) as CardKey[];
@@ -411,6 +416,7 @@ export default function Home() {
         phase2: phaseMastered(savedP2),
         phase3: phaseMastered(savedP3),
         phase4: phase4Mastered(savedPhase4CarrierMastery),
+        phase5: phase5Mastered(savedPhase5RunLocationMastery),
       };
       const migratedCards = Object.fromEntries(
         CARD_KEYS.map((key) => [key, savedCards[key] || masteryCards[key]]),
@@ -540,6 +546,7 @@ export default function Home() {
     const key = cardKeyForPhase(targetPhase);
     setUnlockedCards((current) => {
       if (current[key]) return current;
+      returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setPendingReveal(key);
       return { ...current, [key]: true };
     });
@@ -600,9 +607,11 @@ export default function Home() {
       });
     } else {
       setPhase5RunLocationMastery((current) => {
+        const phaseWasMastered = phase5Mastered(current);
         const wasMastered = (current[locationDigit] ?? 0) >= 5;
         const next = { ...current, [locationDigit]: Math.min(5, (current[locationDigit] ?? 0) + 1) };
         if (!wasMastered && next[locationDigit] === 5) setCelebration(`${locationDigit} · ${selectedRunPlay.concept} mastered in Phase 5!`);
+        if (!phaseWasMastered && phase5Mastered(next)) unlockCard(5);
         return next;
       });
     }
@@ -840,6 +849,7 @@ export default function Home() {
   function handleRevealKey(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
+      finishReveal(false);
       return;
     }
     if (event.key !== "Tab") return;
@@ -872,8 +882,8 @@ export default function Home() {
             </button>
           ))}
         </nav>
-        <button className="collection-count" onClick={() => setTab("cards")} aria-label={`${CARD_KEYS.filter((key) => unlockedCards[key]).length} of 4 cards unlocked`}>
-          <span>★</span> {CARD_KEYS.filter((key) => unlockedCards[key]).length}/4
+        <button className="collection-count" onClick={() => setTab("cards")} aria-label={`${CARD_KEYS.filter((key) => unlockedCards[key]).length} of ${CARD_KEYS.length} cards unlocked`}>
+          <span>★</span> {CARD_KEYS.filter((key) => unlockedCards[key]).length}/{CARD_KEYS.length}
         </button>
       </header>
 
@@ -1071,7 +1081,7 @@ export default function Home() {
           <div className="section-title">
             <p className="eyebrow">Achievement collection</p>
             <h1>My Cards</h1>
-            <p>Master each training phase to collect every card from Rookie through Legendary.</p>
+            <p>Master each training phase to collect every card from Rookie through Mythic.</p>
           </div>
           <div className="card-collection">
             {CARD_KEYS.map((key) => {
@@ -1106,7 +1116,7 @@ export default function Home() {
 
       {tab === "help" && (
         <section className="help-page">
-          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master each training phase to unlock a collectible football card. Build your collection from Rookie through Legendary.</p></div>
+          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master each training phase to unlock a collectible football card. Build your collection from Rookie through Mythic.</p></div>
           <div className="steps">
             {[
               ["1", "Master Y", "Place Y correctly five times in every formation."],

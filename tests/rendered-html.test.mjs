@@ -52,6 +52,14 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /REQUIRED_PHASE5_RUN_DIGITS/);
   assert.match(page, /Ball Carrier Mastery/);
   assert.match(page, /Run Location Mastery/);
+  assert.match(page, /type CardPhase = 1 \| 2 \| 3 \| 4 \| 5/);
+  assert.match(page, /type CardKey = "phase1" \| "phase2" \| "phase3" \| "phase4" \| "phase5"/);
+  assert.match(page, /title: "Lane Finder"/);
+  assert.match(page, /rarity: "Mythic"/);
+  assert.match(page, /image: "assets\/cards\/lane-finder\.png"/);
+  assert.match(page, /phase5: phase5Mastered\(savedPhase5RunLocationMastery\)/);
+  assert.match(page, /phase5Mastered\(next\)\) unlockCard\(5\)/);
+  assert.match(page, /finishReveal\(false\)/);
   assert.doesNotMatch(page, /APPROVED_RUN_FORMATIONS/);
   assert.match(page, /runLocationHistory/);
   assert.match(page, /Where is the runner going\?/);
@@ -69,4 +77,5 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(css, /\.ball-carrier/);
   assert.match(css, /\.card-collection/);
   assert.match(css, /\.card-reveal/);
+  assert.match(css, /\.card-slot\.rarity-mythic/);
 });
