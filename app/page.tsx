@@ -300,8 +300,13 @@ function hTargetsForFormation(formation: FormationName) {
   return H_MODIFIERS.map((modifier) => ({ modifier, ...getHSpot(formation, modifier) }));
 }
 
-function pickWeightedModifier(history: HHistory, previous?: HModifier, repeatCount = 0) {
+function earlyLevelCombinationAllowed(formation: FormationName, modifier: HModifier) {
+  return modifier !== "C" || (formation !== "Liz" && formation !== "Rip");
+}
+
+function pickWeightedModifier(history: HHistory, previous?: HModifier, repeatCount = 0, formation?: FormationName) {
   const pool = H_MODIFIERS.flatMap((modifier) => {
+    if (formation && !earlyLevelCombinationAllowed(formation, modifier)) return [];
     if (modifier === previous && repeatCount >= 2) return [];
     const item = history[modifier];
     const weight = Math.max(1, 3 + item.incorrect * 2 - Math.min(item.correct, 2));
@@ -439,8 +444,9 @@ export default function Home() {
       setPhase5Unlocked(Boolean(saved.phase5Unlocked) || phase4Mastered(savedPhase4CarrierMastery));
       const firstUnseen = CARD_KEYS.find((key) => migratedCards[key] && !savedRevealSeen[key]);
       if (firstUnseen) setPendingReveal(firstUnseen);
-      setFormation(pickWeightedFormation(savedP1));
-      setHModifier(pickWeightedModifier(savedHHistory));
+      const initialFormation = pickWeightedFormation(savedP1);
+      setFormation(initialFormation);
+      setHModifier(pickWeightedModifier(savedHHistory, undefined, 0, initialFormation));
       setSelectedRunPlay(pickApprovedRunPlay(4, savedPhase4CarrierMastery, savedPhase5RunLocationMastery));
     } catch {
       setFormation(pickWeightedFormation(EMPTY_MASTERY));
@@ -758,7 +764,7 @@ export default function Home() {
       setHModifier(nextPlay.hModifier);
     } else {
       const nextFormation = pickWeightedFormation(mastery, formation, repeatCount);
-      const nextModifier = pickWeightedModifier(hHistory, hModifier, hRepeatCount);
+      const nextModifier = pickWeightedModifier(hHistory, hModifier, hRepeatCount, nextFormation);
       setRepeatCount(nextFormation === formation ? repeatCount + 1 : 1);
       setHRepeatCount(nextModifier === hModifier ? hRepeatCount + 1 : 1);
       setFormation(nextFormation);

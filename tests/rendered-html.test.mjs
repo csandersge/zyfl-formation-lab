@@ -48,6 +48,9 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.doesNotMatch(selectableTargets, /"1-4"|"1-16"/);
   assert.match(selectableTargets, /"2-4"/);
   assert.match(selectableTargets, /"2-16"/);
+  assert.match(page, /modifier !== "C" \|\| \(formation !== "Liz" && formation !== "Rip"\)/);
+  assert.match(page, /pickWeightedModifier\(hHistory, hModifier, hRepeatCount, nextFormation\)/);
+  assert.match(page, /setHModifier\(nextPlay\.hModifier\)/);
   assert.match(page, /carrierDigitHistory/);
   assert.match(page, /version:\s*7/);
   assert.match(page, /progressSchemaVersion:\s*2/);
