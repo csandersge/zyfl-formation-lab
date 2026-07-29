@@ -44,6 +44,12 @@ const H_MODIFIERS: HModifier[] = ["A", "B", "C", "D", "1", "2", "3", "4"];
 const CARRIER_DIGITS: CarrierDigit[] = ["1", "2", "4", "5", "6", "7"];
 const LOCATION_DIGITS: LocationDigit[] = ["0", "1", "4", "5", "6", "7", "8", "9"];
 const BALL_CARRIERS: BallCarrier[] = ["QB", "F", "H", "Y", "X", "Z"];
+const EXCLUDED_LEVEL3_COMBINATIONS = new Set([
+  "Liz C",
+  "Rip C",
+  "Rock D",
+  "Lex D",
+]);
 const CARRIER_DIGIT_FOR_PLAYER: Record<BallCarrier, CarrierDigit> = {
   QB: "1", F: "2", H: "4", Y: "5", X: "6", Z: "7",
 };
@@ -327,13 +333,19 @@ function hTargetsForFormation(formation: FormationName) {
   return H_MODIFIERS.map((modifier) => ({ modifier, ...getHSpot(formation, modifier) }));
 }
 
-function earlyLevelCombinationAllowed(formation: FormationName, modifier: HModifier) {
-  return modifier !== "C" || (formation !== "Liz" && formation !== "Rip");
+function level3CombinationAllowed(formation: FormationName, modifier: HModifier) {
+  return !EXCLUDED_LEVEL3_COMBINATIONS.has(`${formation} ${modifier}`);
 }
 
-function pickWeightedModifier(history: HHistory, previous?: HModifier, repeatCount = 0, formation?: FormationName) {
+function pickWeightedModifier(
+  history: HHistory,
+  previous?: HModifier,
+  repeatCount = 0,
+  formation?: FormationName,
+  level?: Phase,
+) {
   const pool = H_MODIFIERS.flatMap((modifier) => {
-    if (formation && !earlyLevelCombinationAllowed(formation, modifier)) return [];
+    if (level === 3 && formation && !level3CombinationAllowed(formation, modifier)) return [];
     if (modifier === previous && repeatCount >= 2) return [];
     const item = history[modifier];
     const weight = Math.max(1, 3 + item.incorrect * 2 - Math.min(item.correct, 2));
@@ -878,7 +890,7 @@ export default function Home() {
       setHModifier(nextPlay.hModifier);
     } else {
       const nextFormation = pickWeightedFormation(mastery, formation, repeatCount);
-      const nextModifier = pickWeightedModifier(hHistory, hModifier, hRepeatCount, nextFormation);
+      const nextModifier = pickWeightedModifier(hHistory, hModifier, hRepeatCount, nextFormation, nextPhase);
       setRepeatCount(nextFormation === formation ? repeatCount + 1 : 1);
       setHRepeatCount(nextModifier === hModifier ? hRepeatCount + 1 : 1);
       setFormation(nextFormation);

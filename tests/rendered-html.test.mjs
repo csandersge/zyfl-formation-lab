@@ -52,8 +52,10 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.doesNotMatch(selectableTargets, /"1-4"|"1-16"/);
   assert.match(selectableTargets, /"2-4"/);
   assert.match(selectableTargets, /"2-16"/);
-  assert.match(page, /modifier !== "C" \|\| \(formation !== "Liz" && formation !== "Rip"\)/);
-  assert.match(page, /pickWeightedModifier\(hHistory, hModifier, hRepeatCount, nextFormation\)/);
+  assert.match(page, /const EXCLUDED_LEVEL3_COMBINATIONS = new Set\(\[\s*"Liz C",\s*"Rip C",\s*"Rock D",\s*"Lex D",\s*\]\)/);
+  assert.match(page, /level === 3 && formation && !level3CombinationAllowed\(formation, modifier\)/);
+  assert.match(page, /pickWeightedModifier\(hHistory, hModifier, hRepeatCount, nextFormation, nextPhase\)/);
+  assert.doesNotMatch(page, /earlyLevelCombinationAllowed/);
   assert.match(page, /setHModifier\(nextPlay\.hModifier\)/);
   assert.match(page, /carrierDigitHistory/);
   assert.match(page, /version:\s*7/);
@@ -113,4 +115,26 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(css, /\.card-collection/);
   assert.match(css, /\.card-reveal/);
   assert.match(css, /\.card-slot\.rarity-mythic/);
+});
+
+test("Level 3 overlap exclusions preserve valid calls for every formation", () => {
+  const formations = ["Right", "Rip", "Rock", "Left", "Liz", "Lex"];
+  const modifiers = ["A", "B", "C", "D", "1", "2", "3", "4"];
+  const excluded = new Set(["Liz C", "Rip C", "Rock D", "Lex D"]);
+
+  const validCounts = Object.fromEntries(
+    formations.map((formation) => [
+      formation,
+      modifiers.filter((modifier) => !excluded.has(`${formation} ${modifier}`)).length,
+    ]),
+  );
+
+  assert.deepEqual(validCounts, {
+    Right: 8,
+    Rip: 7,
+    Rock: 7,
+    Left: 8,
+    Liz: 7,
+    Lex: 7,
+  });
 });
