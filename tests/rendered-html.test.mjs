@@ -43,6 +43,10 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /id: "rip-3-48-reverse-right".*carrier: "H"/);
   assert.doesNotMatch(page, /pickWeightedCarrier|pickWeightedLocation|makeRunNumber/);
   assert.doesNotMatch(page, /"6-8"|"6-12"|label: "F", row:/);
+  const selectableTargets = page.match(/const SELECTABLE:[\s\S]*?\];/)?.[0] ?? "";
+  assert.doesNotMatch(selectableTargets, /"1-4"|"1-16"/);
+  assert.match(selectableTargets, /"2-4"/);
+  assert.match(selectableTargets, /"2-16"/);
   assert.match(page, /carrierDigitHistory/);
   assert.match(page, /version:\s*7/);
   assert.match(page, /progressSchemaVersion:\s*2/);

@@ -150,7 +150,7 @@ const FORMATIONS: Record<FormationName, {
 };
 
 const SELECTABLE: Cell[] = [
-  "1-2", "1-4", "1-7", "1-13", "1-16", "1-18",
+  "1-2", "1-7", "1-13", "1-18",
   "2-2", "2-4", "2-7", "2-13", "2-16", "2-18",
 ];
 const LANDMARKS = [
