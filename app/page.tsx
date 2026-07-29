@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Tab = "play" | "team" | "help";
-type Phase = 1 | 2 | 3;
+type Phase = 1 | 2 | 3 | 4;
 type PlayerLabel = "Y" | "X" | "Z" | "H";
 type ReceiverLabel = "Y" | "X" | "Z";
+type BallCarrier = "QB" | "F" | "H" | "Y" | "X" | "Z";
+type CarrierDigit = "1" | "2" | "4" | "5" | "6" | "7";
+type LocationDigit = "0" | "1" | "4" | "5" | "6" | "7" | "8" | "9";
 type HModifier = "A" | "B" | "C" | "D" | "1" | "2" | "3" | "4";
 type HHistory = Record<HModifier, { correct: number; incorrect: number }>;
+type CarrierHistory = Record<CarrierDigit, { correct: number; incorrect: number }>;
 type HSpot = { c: number; r: number };
 type FormationName = "Right" | "Left" | "Rip" | "Liz" | "Rock" | "Lex";
 type Cell = `${number}-${number}`;
@@ -17,9 +21,18 @@ type Mastery = Record<FormationName, number>;
 const FORMATION_NAMES: FormationName[] = ["Right", "Rip", "Rock", "Left", "Liz", "Lex"];
 const EMPTY_MASTERY: Mastery = { Right: 0, Rip: 0, Rock: 0, Left: 0, Liz: 0, Lex: 0 };
 const H_MODIFIERS: HModifier[] = ["A", "B", "C", "D", "1", "2", "3", "4"];
+const CARRIER_DIGITS: CarrierDigit[] = ["1", "2", "4", "5", "6", "7"];
+const LOCATION_DIGITS: LocationDigit[] = ["0", "1", "4", "5", "6", "7", "8", "9"];
+const BALL_CARRIERS: BallCarrier[] = ["QB", "F", "H", "Y", "X", "Z"];
+const BALL_CARRIER_MAP: Record<CarrierDigit, BallCarrier> = {
+  "1": "QB", "2": "F", "4": "H", "5": "Y", "6": "X", "7": "Z",
+};
 const EMPTY_H_HISTORY: HHistory = Object.fromEntries(
   H_MODIFIERS.map((modifier) => [modifier, { correct: 0, incorrect: 0 }]),
 ) as HHistory;
+const EMPTY_CARRIER_HISTORY: CarrierHistory = Object.fromEntries(
+  CARRIER_DIGITS.map((digit) => [digit, { correct: 0, incorrect: 0 }]),
+) as CarrierHistory;
 const NUMBER_H_SPOTS: Record<"1" | "2" | "3" | "4", HSpot> = {
   "1": { c: 9, r: 5 }, "2": { c: 8.5, r: 2 }, "3": { c: 7.5, r: 2 }, "4": { c: 4, r: 2 },
 };
@@ -110,6 +123,17 @@ function readHHistory(value: unknown): HHistory {
   })) as HHistory;
 }
 
+function readCarrierHistory(value: unknown): CarrierHistory {
+  const source = value && typeof value === "object" ? value as Partial<CarrierHistory> : {};
+  return Object.fromEntries(CARRIER_DIGITS.map((digit) => {
+    const item = source[digit];
+    return [digit, {
+      correct: typeof item?.correct === "number" ? Math.max(0, Math.floor(item.correct)) : 0,
+      incorrect: typeof item?.incorrect === "number" ? Math.max(0, Math.floor(item.incorrect)) : 0,
+    }];
+  })) as CarrierHistory;
+}
+
 function phaseMastered(mastery: Mastery) {
   return FORMATION_NAMES.every((name) => mastery[name] >= 5);
 }
@@ -154,6 +178,22 @@ function pickWeightedFormation(mastery: Mastery, previous?: FormationName, repea
   return pool[Math.floor(Math.random() * pool.length)] ?? "Right";
 }
 
+function pickWeightedCarrier(history: CarrierHistory, previous?: CarrierDigit, repeatCount = 0) {
+  const pool = CARRIER_DIGITS.flatMap((digit) => {
+    if (digit === previous && repeatCount >= 2) return [];
+    const item = history[digit];
+    const weight = Math.max(1, 4 + item.incorrect * 2 - Math.min(item.correct, 3));
+    return Array.from({ length: Math.min(weight, 18) }, () => digit);
+  });
+  return pool[Math.floor(Math.random() * pool.length)] ?? "2";
+}
+
+function makeRunNumber(carrierDigit: CarrierDigit, previous?: string) {
+  const choices = LOCATION_DIGITS.filter((digit) => `${carrierDigit}${digit}` !== previous);
+  const location = choices[Math.floor(Math.random() * choices.length)] ?? "0";
+  return `${carrierDigit}${location}`;
+}
+
 export default function Home() {
   const [tab, setTab] = useState<Tab>("play");
   const [phase, setPhase] = useState<Phase>(1);
@@ -170,9 +210,19 @@ export default function Home() {
   const [p1Mastery, setP1Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [p2Mastery, setP2Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [p3Mastery, setP3Mastery] = useState<Mastery>(EMPTY_MASTERY);
+  const [p4Mastery, setP4Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [phase2Unlocked, setPhase2Unlocked] = useState(false);
   const [phase3Unlocked, setPhase3Unlocked] = useState(false);
+  const [phase4Unlocked, setPhase4Unlocked] = useState(false);
   const [hHistory, setHHistory] = useState<HHistory>(EMPTY_H_HISTORY);
+  const [carrierHistory, setCarrierHistory] = useState<CarrierHistory>(EMPTY_CARRIER_HISTORY);
+  const [carrierDigit, setCarrierDigit] = useState<CarrierDigit>("2");
+  const [carrierRepeatCount, setCarrierRepeatCount] = useState(1);
+  const [runNumber, setRunNumber] = useState("20");
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [quizAnswered, setQuizAnswered] = useState(false);
+  const [quizChoice, setQuizChoice] = useState<BallCarrier | null>(null);
+  const quizRef = useRef<HTMLDivElement>(null);
   const [celebration, setCelebration] = useState<string | null>(null);
   const [coins, setCoins] = useState(0);
   const [teamName, setTeamName] = useState("My Team");
@@ -188,13 +238,18 @@ export default function Home() {
       const savedP1 = readMastery(saved.phase1Mastery);
       const savedP2 = readMastery(saved.phase2Mastery);
       const savedP3 = readMastery(saved.phase3Mastery);
+      const savedP4 = readMastery(saved.phase4Mastery);
       const savedHHistory = readHHistory(saved.hModifierHistory);
+      const savedCarrierHistory = readCarrierHistory(saved.carrierDigitHistory);
       setP1Mastery(savedP1);
       setP2Mastery(savedP2);
       setP3Mastery(savedP3);
+      setP4Mastery(savedP4);
       setHHistory(savedHHistory);
+      setCarrierHistory(savedCarrierHistory);
       setPhase2Unlocked(Boolean(saved.phase2Unlocked) || phaseMastered(savedP1));
       setPhase3Unlocked(Boolean(saved.phase3Unlocked) || phaseMastered(savedP2));
+      setPhase4Unlocked(Boolean(saved.phase4Unlocked) || phaseMastered(savedP3));
       if (typeof saved.coins === "number") setCoins(saved.coins);
       if (typeof saved.teamName === "string") setTeamName(saved.teamName);
       if (typeof saved.primary === "string") setPrimary(saved.primary);
@@ -203,6 +258,9 @@ export default function Home() {
       if (typeof saved.helmet === "string") setHelmet(saved.helmet);
       setFormation(pickWeightedFormation(savedP1));
       setHModifier(pickWeightedModifier(savedHHistory));
+      const nextCarrier = pickWeightedCarrier(savedCarrierHistory);
+      setCarrierDigit(nextCarrier);
+      setRunNumber(makeRunNumber(nextCarrier));
     } catch {
       setFormation(pickWeightedFormation(EMPTY_MASTERY));
     }
@@ -212,7 +270,7 @@ export default function Home() {
   useEffect(() => {
     if (!ready) return;
     localStorage.setItem("zyfl-progress", JSON.stringify({
-      version: 3,
+      version: 4,
       phase1Mastery: p1Mastery,
       phase1Mastered: phaseMastered(p1Mastery),
       phase2Unlocked,
@@ -221,10 +279,14 @@ export default function Home() {
       phase3Unlocked,
       phase3Mastery: p3Mastery,
       phase3Mastered: phaseMastered(p3Mastery),
+      phase4Unlocked,
+      phase4Mastery: p4Mastery,
+      phase4Mastered: phaseMastered(p4Mastery),
       hModifierHistory: hHistory,
+      carrierDigitHistory: carrierHistory,
       coins, teamName, primary, secondary, unlocked, helmet,
     }));
-  }, [p1Mastery, p2Mastery, p3Mastery, phase2Unlocked, phase3Unlocked, hHistory, coins, teamName, primary, secondary, unlocked, helmet, ready]);
+  }, [p1Mastery, p2Mastery, p3Mastery, p4Mastery, phase2Unlocked, phase3Unlocked, phase4Unlocked, hHistory, carrierHistory, coins, teamName, primary, secondary, unlocked, helmet, ready]);
 
   useEffect(() => {
     if (!celebration) return;
@@ -232,9 +294,16 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [celebration]);
 
-  const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : p3Mastery;
+  useEffect(() => {
+    if (!quizOpen) return;
+    quizRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [quizOpen]);
+
+  const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : phase === 3 ? p3Mastery : p4Mastery;
   const correctCell = currentPlayer === "H" ? null : FORMATIONS[formation].players[currentPlayer];
   const correctHSpot = getHSpot(formation, hModifier);
+  const ballCarrier = BALL_CARRIER_MAP[carrierDigit];
+  const completeCall = `${formation} ${hModifier} ${runNumber}`;
   const instruction = phase === 1
     ? "Place the Y player."
     : currentPlayer === "Y" ? "Place the Y player."
@@ -245,7 +314,7 @@ export default function Home() {
   const boardStatus = useMemo(() => {
     if (!answered) return instruction;
     if (resultCorrect) {
-      return phase === 1 ? "Touchdown! You earned 10 coins." : `Formation complete! You earned ${phase === 2 ? 30 : 40} coins.`;
+      return phase === 1 ? "Touchdown! You earned 10 coins." : `Formation complete! You earned ${phase === 2 ? 30 : phase === 3 ? 40 : 50} coins.`;
     }
     if (currentPlayer === "H") {
       const side = correctHSpot.c > 10 ? "right" : "left";
@@ -277,11 +346,22 @@ export default function Home() {
         }
         return next;
       });
-    } else {
+    } else if (targetPhase === 3) {
       setP3Mastery((current) => {
         const wasMastered = current[formation] >= 5;
         const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
         if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 3!`);
+        if (!phase4Unlocked && phaseMastered(next)) {
+          setPhase4Unlocked(true);
+          setCelebration("Phase 4 unlocked! The first run-number digit names the ball carrier.");
+        }
+        return next;
+      });
+    } else {
+      setP4Mastery((current) => {
+        const wasMastered = current[formation] >= 5;
+        const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
+        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 4!`);
         return next;
       });
     }
@@ -308,7 +388,7 @@ export default function Home() {
       return;
     }
 
-    const playerOrder: PlayerLabel[] = phase === 3 ? ["Y", "X", "Z", "H"] : ["Y", "X", "Z"];
+    const playerOrder: PlayerLabel[] = phase >= 3 ? ["Y", "X", "Z", "H"] : ["Y", "X", "Z"];
     const playerIndex = playerOrder.indexOf(currentPlayer);
     if (playerIndex < playerOrder.length - 1) {
       setCurrentPlayer(playerOrder[playerIndex + 1]);
@@ -332,32 +412,87 @@ export default function Home() {
         [correct ? "correct" : "incorrect"]: current[hModifier][correct ? "correct" : "incorrect"] + 1,
       },
     }));
-    setAnswered(true);
     if (correct) {
       setCoins((value) => value + 10);
-      recordMastery(3);
+      if (phase === 4) {
+        setResultCorrect(null);
+        setQuizOpen(true);
+      } else {
+        setAnswered(true);
+        recordMastery(3);
+      }
+    } else {
+      setAnswered(true);
+    }
+  }
+
+  function chooseBallCarrier(choice: BallCarrier) {
+    if (!quizOpen || quizAnswered) return;
+    const correct = choice === ballCarrier;
+    setQuizChoice(choice);
+    setQuizAnswered(true);
+    setResultCorrect(correct);
+    setAnswered(true);
+    setCarrierHistory((current) => ({
+      ...current,
+      [carrierDigit]: {
+        ...current[carrierDigit],
+        [correct ? "correct" : "incorrect"]: current[carrierDigit][correct ? "correct" : "incorrect"] + 1,
+      },
+    }));
+    if (correct) {
+      setCoins((value) => value + 10);
+      recordMastery(4);
+    }
+  }
+
+  function trapQuizFocus(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const buttons = Array.from(quizRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
+    if (!buttons.length) return;
+    const first = buttons[0];
+    const last = buttons[buttons.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   }
 
   function resetPlay(nextPhase = phase) {
-    const mastery = nextPhase === 1 ? p1Mastery : nextPhase === 2 ? p2Mastery : p3Mastery;
+    const mastery = nextPhase === 1 ? p1Mastery : nextPhase === 2 ? p2Mastery : nextPhase === 3 ? p3Mastery : p4Mastery;
     const nextFormation = pickWeightedFormation(mastery, formation, repeatCount);
     const nextModifier = pickWeightedModifier(hHistory, hModifier, hRepeatCount);
+    const nextCarrier = pickWeightedCarrier(carrierHistory, carrierDigit, carrierRepeatCount);
+    const nextRunNumber = makeRunNumber(nextCarrier, runNumber);
     setRepeatCount(nextFormation === formation ? repeatCount + 1 : 1);
     setHRepeatCount(nextModifier === hModifier ? hRepeatCount + 1 : 1);
+    setCarrierRepeatCount(nextCarrier === carrierDigit ? carrierRepeatCount + 1 : 1);
     setFormation(nextFormation);
     setHModifier(nextModifier);
+    setCarrierDigit(nextCarrier);
+    setRunNumber(nextRunNumber);
     setCurrentPlayer("Y");
     setPlacements({});
     setHPlacement(null);
     setSelected(null);
     setAnswered(false);
     setResultCorrect(null);
+    setQuizOpen(false);
+    setQuizAnswered(false);
+    setQuizChoice(null);
   }
 
   function choosePhase(nextPhase: Phase) {
     if (nextPhase === 2 && !phase2Unlocked) return;
     if (nextPhase === 3 && !phase3Unlocked) return;
+    if (nextPhase === 4 && !phase4Unlocked) return;
     setPhase(nextPhase);
     resetPlay(nextPhase);
   }
@@ -368,6 +503,16 @@ export default function Home() {
     if (placed) return { label: placed[0] };
     if (currentPlayer !== "H" && answered && resultCorrect === false && correctCell === cell) return { label: currentPlayer, reveal: true };
     return null;
+  }
+
+  function carrierClass(label: string) {
+    return phase === 4 && quizAnswered && label === ballCarrier ? "ball-carrier" : "";
+  }
+
+  function footballBadge(label: string) {
+    return phase === 4 && quizAnswered && label === ballCarrier
+      ? <span className="football-badge" aria-label="Ball carrier">🏈</span>
+      : null;
   }
 
   function unlockHelmet(id: HelmetId, cost: number) {
@@ -414,12 +559,16 @@ export default function Home() {
               <span>Phase 3 {phase3Unlocked ? "✓" : "🔒"}</span><b>Add the H back</b>
               {!phase3Unlocked && <small>Master Phase 2 to unlock H-back training</small>}
             </button>
+            <button className={phase === 4 ? "phase-active" : ""} onClick={() => choosePhase(4)} disabled={!phase4Unlocked}>
+              <span>Phase 4 {phase4Unlocked ? "✓" : "🔒"}</span><b>Identify the Ball Carrier</b>
+              {!phase4Unlocked && <small>Master all six formations in Phase 3 to unlock ball-carrier training</small>}
+            </button>
           </div>
 
           <div className="play-heading">
             <div className="play-call">
               <p className="eyebrow">Coach&apos;s call · Phase {phase}</p>
-              <h1>{formation}{phase === 3 ? ` ${hModifier}` : ""}!</h1>
+              <h1>{phase === 4 ? completeCall : `${formation}${phase === 3 ? ` ${hModifier}` : ""}`}!</h1>
             </div>
             <div className={`feedback ${answered ? "visible" : ""} ${answered && resultCorrect ? "success" : "try-again"}`} aria-live="polite">
               <span className="feedback-icon">{answered ? (resultCorrect ? "✓" : "!") : currentPlayer}</span>
@@ -429,7 +578,7 @@ export default function Home() {
               </div>
               {answered && <button className="primary-button" onClick={() => resetPlay()}>Next Play <span>→</span></button>}
             </div>
-            <div className="challenge-chip"><span>{currentPlayer}</span> Place {currentPlayer}</div>
+            <div className="challenge-chip"><span>{quizOpen ? "?" : currentPlayer}</span>{quizOpen ? "Name the carrier" : `Place ${currentPlayer}`}</div>
           </div>
 
           <div className={`board-wrap ${answered && resultCorrect ? "board-correct" : ""}`}>
@@ -451,14 +600,16 @@ export default function Home() {
                     className={`target ${selectedHere && resultCorrect === false ? "selected" : ""} ${correctHere ? "correct-target" : ""}`}
                     style={{ gridRow: row, gridColumn: col }}
                     onClick={() => chooseCell(cell)}
-                    disabled={answered || currentPlayer === "H"}
+                    disabled={answered || quizOpen || currentPlayer === "H"}
                     aria-label={`Place ${currentPlayer} at row ${row}, column ${col}`}
                   >
-                    {marker && <span className={`player skill-player player-${marker.label.toLowerCase()} ${marker.reveal ? "revealed-player" : ""}`}>{marker.label}</span>}
+                    {marker && <span className={`player skill-player player-${marker.label.toLowerCase()} ${marker.reveal ? "revealed-player" : ""} ${carrierClass(marker.label)}`}>
+                      {marker.label}{footballBadge(marker.label)}
+                    </span>}
                   </button>
                 );
               })}
-              {phase === 3 && hTargetsForFormation(formation).map((spot) => {
+              {phase >= 3 && hTargetsForFormation(formation).map((spot) => {
                 const selectedHere = hPlacement === spot.modifier;
                 const correctHere = answered && resultCorrect === false && spot.modifier === hModifier;
                 const showMarker = selectedHere || correctHere;
@@ -471,20 +622,62 @@ export default function Home() {
                       top: `calc((${spot.r} - 0.5) * (100% / 6))`,
                     }}
                     onClick={() => chooseHSpot(spot.modifier)}
-                    disabled={answered || currentPlayer !== "H"}
+                    disabled={answered || quizOpen || currentPlayer !== "H"}
                     data-active={currentPlayer === "H"}
                     aria-label="Place H at this location"
                   >
-                    {showMarker && <span className={`player skill-player player-h ${correctHere ? "revealed-player" : ""}`}>H</span>}
+                    {showMarker && <span className={`player skill-player player-h ${correctHere ? "revealed-player" : ""} ${carrierClass("H")}`}>
+                      H{footballBadge("H")}
+                    </span>}
                   </button>
                 );
               })}
               {FIXED.map((player) => (
-                <span key={player.label} className={`player fixed ${player.label === "C" ? "center" : ""}`} style={{ gridRow: player.row, gridColumn: player.col }}>
-                  {player.label}
+                <span key={player.label} className={`player fixed ${player.label === "C" ? "center" : ""} ${carrierClass(player.label)}`} style={{ gridRow: player.row, gridColumn: player.col }}>
+                  {player.label}{footballBadge(player.label)}
                 </span>
               ))}
             </div>
+            {phase === 4 && quizOpen && (
+              <div className="quiz-overlay">
+                <div
+                  ref={quizRef}
+                  className="carrier-quiz"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="carrier-quiz-title"
+                  onKeyDown={trapQuizFocus}
+                  tabIndex={-1}
+                >
+                  <p className="eyebrow">Complete play call</p>
+                  <h2>{completeCall}</h2>
+                  <h3 id="carrier-quiz-title">Who is carrying the ball?</h3>
+                  <div className="carrier-answers">
+                    {BALL_CARRIERS.map((answer) => {
+                      const isCorrect = answer === ballCarrier;
+                      const isChosen = answer === quizChoice;
+                      return (
+                        <button
+                          key={answer}
+                          className={`${quizAnswered && isCorrect ? "correct-answer" : ""} ${quizAnswered && isChosen && !isCorrect ? "wrong-answer" : ""}`}
+                          onClick={() => chooseBallCarrier(answer)}
+                          disabled={quizAnswered}
+                        >
+                          {answer}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {quizAnswered && (
+                    <div className={`quiz-result ${resultCorrect ? "correct" : "incorrect"}`} role="status">
+                      <b>{resultCorrect ? "Correct!" : "Not quite."}</b>
+                      <p>The {carrierDigit} in {runNumber} means {ballCarrier} carries the ball.</p>
+                      <button className="primary-button" onClick={() => resetPlay()}>Next Play <span>→</span></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <MasteryTracker phase={phase} mastery={activeMastery} />
@@ -528,13 +721,14 @@ export default function Home() {
 
       {tab === "help" && (
         <section className="help-page">
-          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master Y, build the formation, then add the H back.</p></div>
+          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master the formation, add the H back, and identify the ball carrier.</p></div>
           <div className="steps">
             {[
               ["1", "Master Y", "Place Y correctly five times in every formation."],
               ["2", "Unlock Phase 2", "Master all six formations to unlock Y, X, and Z."],
               ["3", "Build the formation", "In Phase 2, place Y, then X, then Z."],
               ["4", "Add H", "Letters follow Y. Numbers send H away from Y."],
+              ["5", "Name the carrier", "The first run-number digit tells who carries the ball."],
             ].map(([number, title, copy]) => <article key={number}><span>{number}</span><h2>{title}</h2><p>{copy}</p></article>)}
           </div>
           <div className="reference">
@@ -546,6 +740,7 @@ export default function Home() {
             </div>
             <p className="memory-tip"><b>Memory tip:</b> Right-side formations start with R. Left-side formations start with L.</p>
             <p className="memory-tip h-rule"><b>H-back rule:</b> A, B, C, and D place H on the same side as Y. 1, 2, 3, and 4 place H away from Y.</p>
+            <p className="memory-tip carrier-rule"><b>Ball-carrier rule:</b> 1 = QB, 2 = F, 4 = H, 5 = Y, 6 = X, and 7 = Z.</p>
           </div>
         </section>
       )}
