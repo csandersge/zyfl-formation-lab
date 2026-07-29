@@ -207,6 +207,18 @@ const CARD_DATA: Record<CardKey, {
   },
 };
 const CARD_KEYS = Object.keys(CARD_DATA) as CardKey[];
+const LEVEL_CONFIG: Array<{
+  level: Phase;
+  title: string;
+  reward: string;
+  lockedMessage?: string;
+}> = [
+  { level: 1, title: "Place Y", reward: "Reward: Rookie Football Card" },
+  { level: 2, title: "Place Y, X & Z", reward: "Reward: Pro Football Card", lockedMessage: "Master all six formations to unlock" },
+  { level: 3, title: "Add the H back", reward: "Reward: Elite Football Card", lockedMessage: "Master Level 2 to unlock H-back training" },
+  { level: 4, title: "Identify the Ball Carrier", reward: "Reward: Legendary Football Card", lockedMessage: "Master all six formations in Level 3 to unlock ball-carrier training" },
+  { level: 5, title: "Identify the Run Location", reward: "Reward: Lane Finder", lockedMessage: "Master every active ball carrier in Level 4 to unlock run-location training" },
+];
 
 function clampMastery(value: unknown): number {
   return typeof value === "number" ? Math.max(0, Math.min(5, Math.floor(value))) : 0;
@@ -466,9 +478,12 @@ export default function Home() {
   const [pendingLevelAdvance, setPendingLevelAdvance] = useState<Phase | null>(null);
   const [revealReady, setRevealReady] = useState(false);
   const [detailCard, setDetailCard] = useState<CardKey | null>(null);
+  const [levelScrollAtStart, setLevelScrollAtStart] = useState(true);
+  const [levelScrollAtEnd, setLevelScrollAtEnd] = useState(false);
   const revealRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
-  const levelSelectorRef = useRef<HTMLDivElement>(null);
+  const levelSelectorRef = useRef<HTMLElement>(null);
+  const levelScrollViewportRef = useRef<HTMLDivElement>(null);
   const completionQueuedRef = useRef<Set<Phase>>(new Set());
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const [ready, setReady] = useState(false);
@@ -589,6 +604,33 @@ export default function Home() {
   }, [detailCard]);
 
   useEffect(() => {
+    if (tab !== "play") return;
+    const viewport = levelScrollViewportRef.current;
+    if (!viewport) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      scrollActiveLevelIntoView();
+      updateLevelScrollButtons();
+    });
+    const handleResize = () => updateLevelScrollButtons();
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(handleResize);
+
+    viewport.addEventListener("scroll", updateLevelScrollButtons, { passive: true });
+    window.addEventListener("resize", handleResize);
+    resizeObserver?.observe(viewport);
+    if (viewport.firstElementChild) resizeObserver?.observe(viewport.firstElementChild);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      viewport.removeEventListener("scroll", updateLevelScrollButtons);
+      window.removeEventListener("resize", handleResize);
+      resizeObserver?.disconnect();
+    };
+  }, [phase, tab]);
+
+  useEffect(() => {
     if (!pendingLevelAdvance || pendingReveal) return;
     const rewardKey = cardKeyForPhase(pendingLevelAdvance);
     if (!unlockedCards[rewardKey] || !cardRevealSeen[rewardKey]) return;
@@ -649,6 +691,51 @@ export default function Home() {
     if (level === 5) setPhase5Unlocked(true);
   }
 
+  function levelIsUnlocked(level: Phase) {
+    if (level === 1) return true;
+    if (level === 2) return phase2Unlocked;
+    if (level === 3) return phase3Unlocked;
+    if (level === 4) return phase4Unlocked;
+    return phase5Unlocked;
+  }
+
+  function updateLevelScrollButtons() {
+    const viewport = levelScrollViewportRef.current;
+    if (!viewport) return;
+    const tolerance = 2;
+    setLevelScrollAtStart(viewport.scrollLeft <= tolerance);
+    setLevelScrollAtEnd(
+      viewport.scrollLeft + viewport.clientWidth >= viewport.scrollWidth - tolerance,
+    );
+  }
+
+  function scrollActiveLevelIntoView() {
+    const activeCard = levelSelectorRef.current?.querySelector<HTMLButtonElement>(
+      '.level-card[aria-current="step"]',
+    );
+    activeCard?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }
+
+  function getLevelScrollAmount() {
+    const card = levelSelectorRef.current?.querySelector<HTMLElement>(".level-card");
+    const track = levelSelectorRef.current?.querySelector<HTMLElement>(".level-scroll-track");
+    if (!card || !track) return 280;
+    const styles = window.getComputedStyle(track);
+    const gap = Number.parseFloat(styles.columnGap || styles.gap || "0");
+    return card.getBoundingClientRect().width + gap;
+  }
+
+  function scrollLevels(direction: -1 | 1) {
+    levelScrollViewportRef.current?.scrollBy({
+      left: direction * getLevelScrollAmount(),
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }
+
   function advanceToNextLevel(currentLevel: Phase) {
     const nextLevel = currentLevel + 1;
     setPendingLevelAdvance(null);
@@ -662,15 +749,13 @@ export default function Home() {
       setCelebration(`Level ${targetLevel} ready!`);
       window.setTimeout(() => {
         const target = levelSelectorRef.current?.querySelector<HTMLButtonElement>(`button[data-level="${targetLevel}"]`);
-        target?.focus();
-        target?.scrollIntoView({ block: "nearest" });
+        target?.focus({ preventScroll: true });
       }, 0);
     } else {
       setCelebration("All levels mastered!");
       window.setTimeout(() => {
         const target = levelSelectorRef.current?.querySelector<HTMLButtonElement>('button[data-level="5"]');
-        target?.focus();
-        target?.scrollIntoView({ block: "nearest" });
+        target?.focus({ preventScroll: true });
       }, 0);
     }
   }
@@ -1025,32 +1110,51 @@ export default function Home() {
         <section className="play-page">
           {celebration && <div className="celebration" role="status"><span>★</span>{celebration}</div>}
 
-          <div ref={levelSelectorRef} className="phase-selector" aria-label="Training level">
-            <button data-level="1" className={phase === 1 ? "phase-active" : ""} onClick={() => choosePhase(1)}>
-              <span>Level 1</span><b>Place Y</b>
-              <small className="phase-reward">{unlockedCards.phase1 ? "Card Unlocked ✓" : "Reward: Rookie Football Card"}</small>
+          <section ref={levelSelectorRef} className="level-selector" aria-label="Choose a level">
+            <button
+              type="button"
+              className="level-scroll-button level-scroll-left"
+              aria-label="Previous levels"
+              disabled={levelScrollAtStart}
+              onClick={() => scrollLevels(-1)}
+            >
+              <span aria-hidden="true">‹</span>
             </button>
-            <button data-level="2" className={phase === 2 ? "phase-active" : ""} onClick={() => choosePhase(2)} disabled={!phase2Unlocked}>
-              <span>Level 2 {phase2Unlocked ? "✓" : "🔒"}</span><b>Place Y, X & Z</b>
-              {!phase2Unlocked && <small>Master all six formations to unlock</small>}
-              <small className="phase-reward">{unlockedCards.phase2 ? "Card Unlocked ✓" : "Reward: Pro Football Card"}</small>
+            <div ref={levelScrollViewportRef} className="level-scroll-viewport">
+              <div className="level-scroll-track">
+                {LEVEL_CONFIG.map(({ level, title, reward, lockedMessage }) => {
+                  const unlocked = levelIsUnlocked(level);
+                  const cardKey = cardKeyForPhase(level);
+                  const completed = unlockedCards[cardKey];
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      data-level={level}
+                      className={`level-card ${phase === level ? "phase-active" : ""}`}
+                      aria-current={phase === level ? "step" : undefined}
+                      onClick={() => choosePhase(level)}
+                      disabled={!unlocked}
+                    >
+                      <span>Level {level} {completed ? "✓" : unlocked ? "" : "🔒"}</span>
+                      <b>{title}</b>
+                      {!unlocked && lockedMessage && <small>{lockedMessage}</small>}
+                      <small className="phase-reward">{completed ? "Card Unlocked ✓" : reward}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="level-scroll-button level-scroll-right"
+              aria-label="More levels"
+              disabled={levelScrollAtEnd}
+              onClick={() => scrollLevels(1)}
+            >
+              <span aria-hidden="true">›</span>
             </button>
-            <button data-level="3" className={phase === 3 ? "phase-active" : ""} onClick={() => choosePhase(3)} disabled={!phase3Unlocked}>
-              <span>Level 3 {phase3Unlocked ? "✓" : "🔒"}</span><b>Add the H back</b>
-              {!phase3Unlocked && <small>Master Level 2 to unlock H-back training</small>}
-              <small className="phase-reward">{unlockedCards.phase3 ? "Card Unlocked ✓" : "Reward: Elite Football Card"}</small>
-            </button>
-            <button data-level="4" className={phase === 4 ? "phase-active" : ""} onClick={() => choosePhase(4)} disabled={!phase4Unlocked}>
-              <span>Level 4 {phase4Unlocked ? "✓" : "🔒"}</span><b>Identify the Ball Carrier</b>
-              {!phase4Unlocked && <small>Master all six formations in Level 3 to unlock ball-carrier training</small>}
-              <small className="phase-reward">{unlockedCards.phase4 ? "Card Unlocked ✓" : "Reward: Legendary Football Card"}</small>
-            </button>
-            <button data-level="5" className={phase === 5 ? "phase-active" : ""} onClick={() => choosePhase(5)} disabled={!phase5Unlocked}>
-              <span>Level 5 {phase5Unlocked ? "✓" : "🔒"}</span><b>Identify the Run Location</b>
-              {!phase5Unlocked && <small>Master every active ball carrier in Level 4 to unlock run-location training</small>}
-              <small className="phase-reward">{unlockedCards.phase5 ? "Card Unlocked ✓" : "Reward: Lane Finder"}</small>
-            </button>
-          </div>
+          </section>
 
           <div className="play-heading">
             <div className="play-call">
