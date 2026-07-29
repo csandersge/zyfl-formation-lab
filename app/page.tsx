@@ -705,30 +705,6 @@ export default function Home() {
       : null;
   }
 
-  function runPathStyle(): React.CSSProperties {
-    let start: HSpot;
-    if (ballCarrier === "QB") start = { c: 10, r: 4 };
-    else if (ballCarrier === "F") start = { c: 10, r: 6 };
-    else if (ballCarrier === "H") start = correctHSpot;
-    else {
-      const [r, c] = FORMATIONS[formation].players[ballCarrier].split("-").map(Number);
-      start = { c, r };
-    }
-    const targetAfter = LANDMARKS.find((mark) => mark.label === locationDigit)?.after ?? 10;
-    const startX = (start.c - .5) / 19;
-    const startY = (start.r - .5) / 6;
-    const targetX = targetAfter / 19;
-    const targetY = .04;
-    const dx = targetX - startX;
-    const dy = (targetY - startY) * (6 / 19);
-    return {
-      left: `${startX * 100}%`,
-      top: `${startY * 100}%`,
-      width: `${Math.hypot(dx, dy) * 100}%`,
-      transform: `rotate(${Math.atan2(dy, dx) * 180 / Math.PI}deg)`,
-    };
-  }
-
   function finishReveal(viewCollection: boolean) {
     if (!pendingReveal) return;
     setCardRevealSeen((current) => ({ ...current, [pendingReveal]: true }));
@@ -939,9 +915,6 @@ export default function Home() {
                   {player.label}{footballBadge(player.label)}
                 </span>
               ))}
-              {phase === 5 && locationAnswered && (
-                <div className="run-path" style={runPathStyle()} aria-hidden="true"><span /></div>
-              )}
             </div>
             {phase >= 4 && quizOpen && (
               <div className="quiz-overlay">

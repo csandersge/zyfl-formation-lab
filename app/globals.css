@@ -78,9 +78,6 @@ h1, h2, p { margin-top: 0; }
   background-size: calc(100% / 19) calc(100% / 6);
 }
 .line-of-scrimmage { grid-column: 1 / -1; grid-row: 1; align-self: end; border-top: 2px solid rgba(255,255,255,.36); z-index: 0; }
-.run-path { position: absolute; z-index: 7; height: 5px; border-radius: 99px; background: var(--gold); box-shadow: 0 0 10px rgba(247,200,67,.65); transform-origin: 0 50%; animation: draw-path .7s ease-out both; pointer-events: none; }
-.run-path::after { content: ""; position: absolute; right: -2px; top: 50%; width: 15px; height: 15px; border-top: 5px solid var(--gold); border-right: 5px solid var(--gold); transform: translateY(-50%) rotate(45deg); }
-@keyframes draw-path { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 -18px 0 0); } }
 .target, .player { align-self: center; justify-self: center; position: relative; z-index: 2; }
 .target { width: 68%; aspect-ratio: .68; max-height: 62px; border: 2px solid rgba(255,255,255,.68); background: rgba(255,255,255,.035); border-radius: 8px; cursor: pointer; padding: 0; display: grid; place-items: center; transition: transform .16s, border-color .16s, background .16s; }
 .target:hover:not(:disabled), .target:focus-visible { transform: scale(1.08); border-color: var(--gold); background: rgba(247,200,67,.12); outline: none; }
