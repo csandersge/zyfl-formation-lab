@@ -70,7 +70,16 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /rarity: "Mythic"/);
   assert.match(page, /image: "assets\/cards\/lane-finder\.png"/);
   assert.match(page, /phase5: phase5Mastered\(savedPhase5RunLocationMastery\)/);
-  assert.match(page, /phase5Mastered\(next\)\) unlockCard\(5\)/);
+  assert.match(page, /phase5Mastered\(next\)\) handleLevelMastery\(5\)/);
+  assert.match(page, /function advanceToNextLevel\(currentLevel: Phase\)/);
+  assert.match(page, /function handleLevelMastery\(levelNumber: Phase\)/);
+  assert.equal((page.match(/handleLevelMastery\([1-5]\)/g) ?? []).length, 5);
+  assert.match(page, /if \(!pendingLevelAdvance \|\| pendingReveal\) return/);
+  assert.match(page, /if \(!phaseWasMastered && phaseMastered\(next\)\) handleLevelMastery\(1\)/);
+  assert.match(page, /if \(!phaseWasMastered && phase4Mastered\(next\)\) handleLevelMastery\(4\)/);
+  assert.match(page, /data-level="5"/);
+  assert.match(page, /Continue to Level/);
+  assert.match(page, /Return to Levels/);
   assert.match(page, /finishReveal\(false\)/);
   assert.match(page, /unlockedCards\.phase5 \? "Card Unlocked ✓" : "Reward: Lane Finder"/);
   assert.doesNotMatch(page, new RegExp(["Phase", "5B"].join(" ")));

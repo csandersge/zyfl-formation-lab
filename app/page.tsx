@@ -392,10 +392,13 @@ export default function Home() {
   const [unlockedCards, setUnlockedCards] = useState<CardState>(EMPTY_CARD_STATE);
   const [cardRevealSeen, setCardRevealSeen] = useState<CardState>(EMPTY_CARD_STATE);
   const [pendingReveal, setPendingReveal] = useState<CardKey | null>(null);
+  const [pendingLevelAdvance, setPendingLevelAdvance] = useState<Phase | null>(null);
   const [revealReady, setRevealReady] = useState(false);
   const [detailCard, setDetailCard] = useState<CardKey | null>(null);
   const revealRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
+  const levelSelectorRef = useRef<HTMLDivElement>(null);
+  const completionQueuedRef = useRef<Set<Phase>>(new Set());
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -514,6 +517,13 @@ export default function Home() {
     window.setTimeout(() => detailRef.current?.querySelector<HTMLButtonElement>("button")?.focus(), 0);
   }, [detailCard]);
 
+  useEffect(() => {
+    if (!pendingLevelAdvance || pendingReveal) return;
+    const rewardKey = cardKeyForPhase(pendingLevelAdvance);
+    if (!unlockedCards[rewardKey] || !cardRevealSeen[rewardKey]) return;
+    advanceToNextLevel(pendingLevelAdvance);
+  }, [cardRevealSeen, pendingLevelAdvance, pendingReveal, unlockedCards]);
+
   const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : p3Mastery;
   const correctCell = currentPlayer === "H" ? null : FORMATIONS[formation].players[currentPlayer];
   const correctHSpot = getHSpot(formation, hModifier);
@@ -551,11 +561,54 @@ export default function Home() {
   function unlockCard(targetPhase: CardPhase) {
     const key = cardKeyForPhase(targetPhase);
     setUnlockedCards((current) => {
-      if (current[key]) return current;
+      if (current[key]) {
+        if (!cardRevealSeen[key]) setPendingReveal(key);
+        return current;
+      }
       returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setPendingReveal(key);
       return { ...current, [key]: true };
     });
+  }
+
+  function unlockLevel(level: Phase) {
+    if (level === 2) setPhase2Unlocked(true);
+    if (level === 3) setPhase3Unlocked(true);
+    if (level === 4) setPhase4Unlocked(true);
+    if (level === 5) setPhase5Unlocked(true);
+  }
+
+  function advanceToNextLevel(currentLevel: Phase) {
+    const nextLevel = currentLevel + 1;
+    setPendingLevelAdvance(null);
+    setTab("play");
+
+    if (nextLevel <= 5) {
+      const targetLevel = nextLevel as Phase;
+      unlockLevel(targetLevel);
+      setPhase(targetLevel);
+      resetPlay(targetLevel);
+      setCelebration(`Level ${targetLevel} ready!`);
+      window.setTimeout(() => {
+        const target = levelSelectorRef.current?.querySelector<HTMLButtonElement>(`button[data-level="${targetLevel}"]`);
+        target?.focus();
+        target?.scrollIntoView({ block: "nearest" });
+      }, 0);
+    } else {
+      setCelebration("All levels mastered!");
+      window.setTimeout(() => {
+        const target = levelSelectorRef.current?.querySelector<HTMLButtonElement>('button[data-level="5"]');
+        target?.focus();
+        target?.scrollIntoView({ block: "nearest" });
+      }, 0);
+    }
+  }
+
+  function handleLevelMastery(levelNumber: Phase) {
+    if (completionQueuedRef.current.has(levelNumber)) return;
+    completionQueuedRef.current.add(levelNumber);
+    setPendingLevelAdvance(levelNumber);
+    unlockCard(levelNumber);
   }
 
   function recordMastery(targetPhase: Phase) {
@@ -569,7 +622,7 @@ export default function Home() {
           setPhase2Unlocked(true);
           setCelebration("Level 2 unlocked! Now place Y, X, and Z.");
         }
-        if (!phaseWasMastered && phaseMastered(next)) unlockCard(1);
+        if (!phaseWasMastered && phaseMastered(next)) handleLevelMastery(1);
         return next;
       });
     } else if (targetPhase === 2) {
@@ -582,7 +635,7 @@ export default function Home() {
           setPhase3Unlocked(true);
           setCelebration("Level 3 unlocked! Letters follow Y; numbers go away from Y.");
         }
-        if (!phaseWasMastered && phaseMastered(next)) unlockCard(2);
+        if (!phaseWasMastered && phaseMastered(next)) handleLevelMastery(2);
         return next;
       });
     } else if (targetPhase === 3) {
@@ -595,7 +648,7 @@ export default function Home() {
           setPhase4Unlocked(true);
           setCelebration("Level 4 unlocked! The first run-number digit names the ball carrier.");
         }
-        if (!phaseWasMastered && phaseMastered(next)) unlockCard(3);
+        if (!phaseWasMastered && phaseMastered(next)) handleLevelMastery(3);
         return next;
       });
     } else if (targetPhase === 4) {
@@ -608,7 +661,7 @@ export default function Home() {
           setPhase5Unlocked(true);
           setCelebration("Level 5 unlocked! The second digit tells where the runner is going.");
         }
-        if (!phaseWasMastered && phase4Mastered(next)) unlockCard(4);
+        if (!phaseWasMastered && phase4Mastered(next)) handleLevelMastery(4);
         return next;
       });
     } else {
@@ -617,7 +670,7 @@ export default function Home() {
         const wasMastered = (current[locationDigit] ?? 0) >= 5;
         const next = { ...current, [locationDigit]: Math.min(5, (current[locationDigit] ?? 0) + 1) };
         if (!wasMastered && next[locationDigit] === 5) setCelebration(`${locationDigit} · ${selectedRunPlay.concept} mastered in Level 5!`);
-        if (!phaseWasMastered && phase5Mastered(next)) unlockCard(5);
+        if (!phaseWasMastered && phase5Mastered(next)) handleLevelMastery(5);
         return next;
       });
     }
@@ -816,8 +869,10 @@ export default function Home() {
     if (!pendingReveal) return;
     setCardRevealSeen((current) => ({ ...current, [pendingReveal]: true }));
     setPendingReveal(null);
-    if (viewCollection) setTab("cards");
-    window.setTimeout(() => returnFocusRef.current?.focus(), 0);
+    if (!pendingLevelAdvance) {
+      if (viewCollection) setTab("cards");
+      window.setTimeout(() => returnFocusRef.current?.focus(), 0);
+    }
   }
 
   function openCard(key: CardKey, trigger: HTMLElement) {
@@ -897,27 +952,27 @@ export default function Home() {
         <section className="play-page">
           {celebration && <div className="celebration" role="status"><span>★</span>{celebration}</div>}
 
-          <div className="phase-selector" aria-label="Training level">
-            <button className={phase === 1 ? "phase-active" : ""} onClick={() => choosePhase(1)}>
+          <div ref={levelSelectorRef} className="phase-selector" aria-label="Training level">
+            <button data-level="1" className={phase === 1 ? "phase-active" : ""} onClick={() => choosePhase(1)}>
               <span>Level 1</span><b>Place Y</b>
               <small className="phase-reward">{unlockedCards.phase1 ? "Card Unlocked ✓" : "Reward: Rookie Football Card"}</small>
             </button>
-            <button className={phase === 2 ? "phase-active" : ""} onClick={() => choosePhase(2)} disabled={!phase2Unlocked}>
+            <button data-level="2" className={phase === 2 ? "phase-active" : ""} onClick={() => choosePhase(2)} disabled={!phase2Unlocked}>
               <span>Level 2 {phase2Unlocked ? "✓" : "🔒"}</span><b>Place Y, X & Z</b>
               {!phase2Unlocked && <small>Master all six formations to unlock</small>}
               <small className="phase-reward">{unlockedCards.phase2 ? "Card Unlocked ✓" : "Reward: Pro Football Card"}</small>
             </button>
-            <button className={phase === 3 ? "phase-active" : ""} onClick={() => choosePhase(3)} disabled={!phase3Unlocked}>
+            <button data-level="3" className={phase === 3 ? "phase-active" : ""} onClick={() => choosePhase(3)} disabled={!phase3Unlocked}>
               <span>Level 3 {phase3Unlocked ? "✓" : "🔒"}</span><b>Add the H back</b>
               {!phase3Unlocked && <small>Master Level 2 to unlock H-back training</small>}
               <small className="phase-reward">{unlockedCards.phase3 ? "Card Unlocked ✓" : "Reward: Elite Football Card"}</small>
             </button>
-            <button className={phase === 4 ? "phase-active" : ""} onClick={() => choosePhase(4)} disabled={!phase4Unlocked}>
+            <button data-level="4" className={phase === 4 ? "phase-active" : ""} onClick={() => choosePhase(4)} disabled={!phase4Unlocked}>
               <span>Level 4 {phase4Unlocked ? "✓" : "🔒"}</span><b>Identify the Ball Carrier</b>
               {!phase4Unlocked && <small>Master all six formations in Level 3 to unlock ball-carrier training</small>}
               <small className="phase-reward">{unlockedCards.phase4 ? "Card Unlocked ✓" : "Reward: Legendary Football Card"}</small>
             </button>
-            <button className={phase === 5 ? "phase-active" : ""} onClick={() => choosePhase(5)} disabled={!phase5Unlocked}>
+            <button data-level="5" className={phase === 5 ? "phase-active" : ""} onClick={() => choosePhase(5)} disabled={!phase5Unlocked}>
               <span>Level 5 {phase5Unlocked ? "✓" : "🔒"}</span><b>Identify the Run Location</b>
               {!phase5Unlocked && <small>Master every active ball carrier in Level 4 to unlock run-location training</small>}
               <small className="phase-reward">{unlockedCards.phase5 ? "Card Unlocked ✓" : "Reward: Lane Finder"}</small>
@@ -1169,8 +1224,16 @@ export default function Home() {
             {revealReady && (
               <>
                 <p>{CARD_DATA[pendingReveal].rarity} · {CARD_DATA[pendingReveal].title}</p>
-                <button className="primary-button" onClick={() => finishReveal(true)}>View My Cards</button>
-                <button className="secondary-button" onClick={() => finishReveal(false)}>Keep Playing</button>
+                {pendingLevelAdvance ? (
+                  <button className="primary-button" onClick={() => finishReveal(false)}>
+                    {pendingLevelAdvance < 5 ? `Continue to Level ${pendingLevelAdvance + 1}` : "Return to Levels"}
+                  </button>
+                ) : (
+                  <>
+                    <button className="primary-button" onClick={() => finishReveal(true)}>View My Cards</button>
+                    <button className="secondary-button" onClick={() => finishReveal(false)}>Keep Playing</button>
+                  </>
+                )}
               </>
             )}
           </div>
