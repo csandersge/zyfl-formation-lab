@@ -3,23 +3,57 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Tab = "play" | "team" | "help";
+type Phase = 1 | 2;
+type PlayerLabel = "Y" | "X" | "Z";
 type FormationName = "Right" | "Left" | "Rip" | "Liz" | "Rock" | "Lex";
 type Cell = `${number}-${number}`;
 type HelmetId = "basic" | "stripe" | "wing" | "lightning";
+type Mastery = Record<FormationName, number>;
 
-const FORMATIONS: Record<FormationName, { cell: Cell; explanation: string; short: string }> = {
-  Right: { cell: "1-13", explanation: "Right: Y lines up as a TE to the right.", short: "TE right" },
-  Left: { cell: "1-7", explanation: "Left: Y lines up as a TE to the left.", short: "TE left" },
-  Rip: { cell: "2-13", explanation: "Rip: Y lines up as a wing back to the right on the outside hip of the tackle.", short: "Wing right" },
-  Liz: { cell: "2-7", explanation: "Liz: Y lines up as a wing back to the left on the outside hip of the tackle.", short: "Wing left" },
-  Rock: { cell: "2-16", explanation: "Rock: Y lines up as slot receiver to the right.", short: "Slot right" },
-  Lex: { cell: "2-4", explanation: "Lex: Y lines up as slot receiver to the left.", short: "Slot left" },
+const FORMATION_NAMES: FormationName[] = ["Right", "Rip", "Rock", "Left", "Liz", "Lex"];
+const EMPTY_MASTERY: Mastery = { Right: 0, Rip: 0, Rock: 0, Left: 0, Liz: 0, Lex: 0 };
+const PLAYER_ORDER: PlayerLabel[] = ["Y", "X", "Z"];
+
+const FORMATIONS: Record<FormationName, {
+  players: Record<PlayerLabel, Cell>;
+  explanation: string;
+  short: string;
+}> = {
+  Right: {
+    players: { Y: "1-13", X: "1-2", Z: "2-18" },
+    explanation: "Right: Y is a TE right, X is wide left on the ball, and Z is wide right off the ball.",
+    short: "TE right",
+  },
+  Left: {
+    players: { Y: "1-7", X: "2-2", Z: "1-18" },
+    explanation: "Left: Y is a TE left, X is wide left off the ball, and Z is wide right on the ball.",
+    short: "TE left",
+  },
+  Rip: {
+    players: { Y: "2-13", X: "1-2", Z: "1-18" },
+    explanation: "Rip: Y is a wing back on the right outside hip of the tackle; X and Z are wide.",
+    short: "Wing right",
+  },
+  Liz: {
+    players: { Y: "2-7", X: "1-2", Z: "1-18" },
+    explanation: "Liz: Y is a wing back on the left outside hip of the tackle; X and Z are wide.",
+    short: "Wing left",
+  },
+  Rock: {
+    players: { Y: "2-16", X: "1-2", Z: "1-18" },
+    explanation: "Rock: Y is the slot receiver to the right; X and Z are wide.",
+    short: "Slot right",
+  },
+  Lex: {
+    players: { Y: "2-4", X: "1-2", Z: "1-18" },
+    explanation: "Lex: Y is the slot receiver to the left; X and Z are wide.",
+    short: "Slot left",
+  },
 };
 
-const FORMATION_NAMES = Object.keys(FORMATIONS) as FormationName[];
 const SELECTABLE: Cell[] = [
   "1-2", "1-4", "1-7", "1-13", "1-16", "1-18",
-  "2-4", "2-7", "2-13", "2-16",
+  "2-2", "2-4", "2-7", "2-13", "2-16", "2-18",
   "6-8", "6-12",
 ];
 const LANDMARKS = [
@@ -41,16 +75,42 @@ const HELMETS: { id: HelmetId; name: string; cost: number }[] = [
   { id: "lightning", name: "Lightning", cost: 100 },
 ];
 
-function pickFormation(previous?: FormationName) {
-  const choices = FORMATION_NAMES.filter((name) => name !== previous);
-  return choices[Math.floor(Math.random() * choices.length)];
+function clampMastery(value: unknown): number {
+  return typeof value === "number" ? Math.max(0, Math.min(5, Math.floor(value))) : 0;
+}
+
+function readMastery(value: unknown): Mastery {
+  const source = value && typeof value === "object" ? value as Partial<Mastery> : {};
+  return Object.fromEntries(FORMATION_NAMES.map((name) => [name, clampMastery(source[name])])) as Mastery;
+}
+
+function phaseMastered(mastery: Mastery) {
+  return FORMATION_NAMES.every((name) => mastery[name] >= 5);
+}
+
+function pickWeightedFormation(mastery: Mastery, previous?: FormationName, repeatCount = 0) {
+  const pool = FORMATION_NAMES.flatMap((name) => {
+    if (name === previous && repeatCount >= 2) return [];
+    const weight = mastery[name] >= 5 ? 1 : 6 - mastery[name];
+    return Array.from({ length: weight }, () => name);
+  });
+  return pool[Math.floor(Math.random() * pool.length)] ?? "Right";
 }
 
 export default function Home() {
   const [tab, setTab] = useState<Tab>("play");
+  const [phase, setPhase] = useState<Phase>(1);
   const [formation, setFormation] = useState<FormationName>("Right");
+  const [repeatCount, setRepeatCount] = useState(1);
+  const [currentPlayer, setCurrentPlayer] = useState<PlayerLabel>("Y");
+  const [placements, setPlacements] = useState<Partial<Record<PlayerLabel, Cell>>>({});
   const [selected, setSelected] = useState<Cell | null>(null);
   const [answered, setAnswered] = useState(false);
+  const [resultCorrect, setResultCorrect] = useState<boolean | null>(null);
+  const [p1Mastery, setP1Mastery] = useState<Mastery>(EMPTY_MASTERY);
+  const [p2Mastery, setP2Mastery] = useState<Mastery>(EMPTY_MASTERY);
+  const [phase2Unlocked, setPhase2Unlocked] = useState(false);
+  const [celebration, setCelebration] = useState<string | null>(null);
   const [coins, setCoins] = useState(0);
   const [teamName, setTeamName] = useState("My Team");
   const [primary, setPrimary] = useState("#18a957");
@@ -62,41 +122,137 @@ export default function Home() {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("zyfl-progress") || "{}");
+      const savedP1 = readMastery(saved.phase1Mastery);
+      const savedP2 = readMastery(saved.phase2Mastery);
+      setP1Mastery(savedP1);
+      setP2Mastery(savedP2);
+      setPhase2Unlocked(Boolean(saved.phase2Unlocked) || phaseMastered(savedP1));
       if (typeof saved.coins === "number") setCoins(saved.coins);
       if (typeof saved.teamName === "string") setTeamName(saved.teamName);
       if (typeof saved.primary === "string") setPrimary(saved.primary);
       if (typeof saved.secondary === "string") setSecondary(saved.secondary);
       if (Array.isArray(saved.unlocked)) setUnlocked(saved.unlocked);
       if (typeof saved.helmet === "string") setHelmet(saved.helmet);
-    } catch { /* Start fresh if local data is invalid. */ }
-    setFormation(pickFormation());
+      setFormation(pickWeightedFormation(savedP1));
+    } catch {
+      setFormation(pickWeightedFormation(EMPTY_MASTERY));
+    }
     setReady(true);
   }, []);
 
   useEffect(() => {
     if (!ready) return;
     localStorage.setItem("zyfl-progress", JSON.stringify({
+      version: 2,
+      phase1Mastery: p1Mastery,
+      phase1Mastered: phaseMastered(p1Mastery),
+      phase2Unlocked,
+      phase2Mastery: p2Mastery,
+      phase2Mastered: phaseMastered(p2Mastery),
       coins, teamName, primary, secondary, unlocked, helmet,
     }));
-  }, [coins, teamName, primary, secondary, unlocked, helmet, ready]);
+  }, [p1Mastery, p2Mastery, phase2Unlocked, coins, teamName, primary, secondary, unlocked, helmet, ready]);
 
-  const isCorrect = selected === FORMATIONS[formation].cell;
+  useEffect(() => {
+    if (!celebration) return;
+    const timer = window.setTimeout(() => setCelebration(null), 2800);
+    return () => window.clearTimeout(timer);
+  }, [celebration]);
+
+  const activeMastery = phase === 1 ? p1Mastery : p2Mastery;
+  const correctCell = FORMATIONS[formation].players[currentPlayer];
+  const instruction = phase === 1
+    ? "Place the Y player."
+    : currentPlayer === "Y" ? "Place the Y player."
+      : currentPlayer === "X" ? "Correct. Now place X."
+        : "Correct. Now place Z.";
+
   const boardStatus = useMemo(() => {
-    if (!answered) return "Tap a white target to place Y.";
-    return isCorrect ? "Touchdown! You earned 10 coins." : FORMATIONS[formation].explanation;
-  }, [answered, formation, isCorrect]);
+    if (!answered) return instruction;
+    if (resultCorrect) {
+      return phase === 1 ? "Touchdown! You earned 10 coins." : "Formation complete! You earned 30 coins.";
+    }
+    return `The blue ${currentPlayer} shows the correct location. Try a new play when ready.`;
+  }, [answered, currentPlayer, instruction, phase, resultCorrect]);
+
+  function recordMastery(targetPhase: Phase) {
+    if (targetPhase === 1) {
+      setP1Mastery((current) => {
+        const wasMastered = current[formation] >= 5;
+        const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
+        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered!`);
+        if (!phase2Unlocked && phaseMastered(next)) {
+          setPhase2Unlocked(true);
+          setCelebration("Phase 2 unlocked! Now place Y, X, and Z.");
+        }
+        return next;
+      });
+    } else {
+      setP2Mastery((current) => {
+        const wasMastered = current[formation] >= 5;
+        const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
+        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 2!`);
+        return next;
+      });
+    }
+  }
 
   function chooseCell(cell: Cell) {
     if (answered) return;
+    const correct = cell === correctCell;
     setSelected(cell);
-    setAnswered(true);
-    if (cell === FORMATIONS[formation].cell) setCoins((value) => value + 10);
+    setPlacements((current) => ({ ...current, [currentPlayer]: cell }));
+
+    if (!correct) {
+      setResultCorrect(false);
+      setAnswered(true);
+      return;
+    }
+
+    setCoins((value) => value + 10);
+    setResultCorrect(true);
+
+    if (phase === 1) {
+      setAnswered(true);
+      recordMastery(1);
+      return;
+    }
+
+    const playerIndex = PLAYER_ORDER.indexOf(currentPlayer);
+    if (playerIndex < PLAYER_ORDER.length - 1) {
+      setCurrentPlayer(PLAYER_ORDER[playerIndex + 1]);
+      setSelected(null);
+      setResultCorrect(null);
+    } else {
+      setAnswered(true);
+      recordMastery(2);
+    }
   }
 
-  function nextPlay() {
-    setFormation((current) => pickFormation(current));
+  function resetPlay(nextPhase = phase) {
+    const mastery = nextPhase === 1 ? p1Mastery : p2Mastery;
+    const nextFormation = pickWeightedFormation(mastery, formation, repeatCount);
+    setRepeatCount(nextFormation === formation ? repeatCount + 1 : 1);
+    setFormation(nextFormation);
+    setCurrentPlayer("Y");
+    setPlacements({});
     setSelected(null);
     setAnswered(false);
+    setResultCorrect(null);
+  }
+
+  function choosePhase(nextPhase: Phase) {
+    if (nextPhase === 2 && !phase2Unlocked) return;
+    setPhase(nextPhase);
+    resetPlay(nextPhase);
+  }
+
+  function markerAt(cell: Cell): { label: PlayerLabel; reveal?: boolean } | null {
+    const placed = (Object.entries(placements) as [PlayerLabel, Cell][])
+      .find(([, placedCell]) => placedCell === cell);
+    if (placed) return { label: placed[0] };
+    if (answered && resultCorrect === false && correctCell === cell) return { label: currentPlayer, reveal: true };
+    return null;
   }
 
   function unlockHelmet(id: HelmetId, cost: number) {
@@ -129,20 +285,35 @@ export default function Home() {
 
       {tab === "play" && (
         <section className="play-page">
-          <div className="play-heading">
-            <div className="play-call">
-              <p className="eyebrow">Coach&apos;s call</p>
-              <h1>{formation}!</h1>
-            </div>
-            <div className={`feedback ${answered ? "visible" : ""} ${answered && isCorrect ? "success" : "try-again"}`} aria-live="polite">
-              <span className="feedback-icon">{answered ? (isCorrect ? "✓" : "!") : "Y"}</span>
-              <div><b>{answered ? (isCorrect ? "Great alignment!" : "Not quite—study the blue Y.") : "You’re up!"}</b><p>{boardStatus}</p></div>
-              {answered && <button className="primary-button" onClick={nextPlay}>Next Play <span>→</span></button>}
-            </div>
-            <div className="challenge-chip"><span>Y</span> Find Y&apos;s spot</div>
+          {celebration && <div className="celebration" role="status"><span>★</span>{celebration}</div>}
+
+          <div className="phase-selector" aria-label="Training phase">
+            <button className={phase === 1 ? "phase-active" : ""} onClick={() => choosePhase(1)}>
+              <span>Phase 1</span><b>Place Y</b>
+            </button>
+            <button className={phase === 2 ? "phase-active" : ""} onClick={() => choosePhase(2)} disabled={!phase2Unlocked}>
+              <span>Phase 2 {phase2Unlocked ? "✓" : "🔒"}</span><b>Place Y, X & Z</b>
+              {!phase2Unlocked && <small>Master all six formations to unlock</small>}
+            </button>
           </div>
 
-          <div className={`board-wrap ${answered && isCorrect ? "board-correct" : ""}`}>
+          <div className="play-heading">
+            <div className="play-call">
+              <p className="eyebrow">Coach&apos;s call · Phase {phase}</p>
+              <h1>{formation}!</h1>
+            </div>
+            <div className={`feedback ${answered ? "visible" : ""} ${answered && resultCorrect ? "success" : "try-again"}`} aria-live="polite">
+              <span className="feedback-icon">{answered ? (resultCorrect ? "✓" : "!") : currentPlayer}</span>
+              <div>
+                <b>{answered ? (resultCorrect ? (phase === 1 ? "Great alignment!" : "Formation complete!") : `Not quite—study the blue ${currentPlayer}.`) : instruction}</b>
+                <p>{boardStatus}</p>
+              </div>
+              {answered && <button className="primary-button" onClick={() => resetPlay()}>Next Play <span>→</span></button>}
+            </div>
+            <div className="challenge-chip"><span>{currentPlayer}</span> Place {currentPlayer}</div>
+          </div>
+
+          <div className={`board-wrap ${answered && resultCorrect ? "board-correct" : ""}`}>
             <div className="landmarks" aria-hidden="true">
               {LANDMARKS.map((mark) => (
                 <b key={mark.label} style={{ gridColumn: mark.after, justifySelf: "end" }}>{mark.label}</b>
@@ -152,18 +323,19 @@ export default function Home() {
               <div className="line-of-scrimmage" />
               {SELECTABLE.map((cell) => {
                 const [row, col] = cell.split("-").map(Number);
+                const marker = markerAt(cell);
                 const selectedHere = selected === cell;
-                const correctHere = answered && FORMATIONS[formation].cell === cell;
+                const correctHere = answered && resultCorrect === false && correctCell === cell;
                 return (
                   <button
                     key={cell}
-                    className={`target ${selectedHere ? "selected" : ""} ${correctHere ? "correct-target" : ""}`}
+                    className={`target ${selectedHere && resultCorrect === false ? "selected" : ""} ${correctHere ? "correct-target" : ""}`}
                     style={{ gridRow: row, gridColumn: col }}
                     onClick={() => chooseCell(cell)}
                     disabled={answered}
-                    aria-label={`Place Y at row ${row}, column ${col}`}
+                    aria-label={`Place ${currentPlayer} at row ${row}, column ${col}`}
                   >
-                    {(selectedHere || correctHere) && <span className="player y-player">Y</span>}
+                    {marker && <span className={`player skill-player player-${marker.label.toLowerCase()} ${marker.reveal ? "revealed-player" : ""}`}>{marker.label}</span>}
                   </button>
                 );
               })}
@@ -175,6 +347,7 @@ export default function Home() {
             </div>
           </div>
 
+          <MasteryTracker phase={phase} mastery={activeMastery} />
         </section>
       )}
 
@@ -215,13 +388,13 @@ export default function Home() {
 
       {tab === "help" && (
         <section className="help-page">
-          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Learn one formation at a time—and build your dream team.</p></div>
+          <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master Y first, then build the full formation.</p></div>
           <div className="steps">
             {[
-              ["1", "Hear the call", "Read the formation called by the coach."],
-              ["2", "Place Y", "Tap where the Y player should line up."],
-              ["3", "Earn coins", "Get 10 coins for every correct answer."],
-              ["4", "Build your team", "Spend coins on helmet designs."],
+              ["1", "Master Y", "Place Y correctly five times in every formation."],
+              ["2", "Unlock Phase 2", "Master all six formations to unlock Y, X, and Z."],
+              ["3", "Build the formation", "In Phase 2, place Y, then X, then Z."],
+              ["4", "Build your team", "Earn coins and unlock helmet designs."],
             ].map(([number, title, copy]) => <article key={number}><span>{number}</span><h2>{title}</h2><p>{copy}</p></article>)}
           </div>
           <div className="reference">
@@ -236,8 +409,30 @@ export default function Home() {
         </section>
       )}
 
-      <footer>ZYFL Formation Lab · Phase 1: Y Alignment</footer>
+      <footer>ZYFL Formation Lab · Formation Mastery</footer>
     </main>
+  );
+}
+
+function MasteryTracker({ phase, mastery }: { phase: Phase; mastery: Mastery }) {
+  return (
+    <section className="mastery-panel" aria-label={`Phase ${phase} mastery`}>
+      <div className="mastery-heading">
+        <div><p className="eyebrow">Phase {phase} progress</p><h2>Formation Mastery</h2></div>
+        <span>{FORMATION_NAMES.filter((name) => mastery[name] >= 5).length}/6 mastered</span>
+      </div>
+      <div className="mastery-grid">
+        {FORMATION_NAMES.map((name) => {
+          const complete = mastery[name] >= 5;
+          return (
+            <div key={name} className={`mastery-item ${complete ? "mastered" : ""}`}>
+              <div><b>{complete ? "✓ " : ""}{name}</b><span>{complete ? "Mastered" : `${mastery[name]}/5`}</span></div>
+              <i><span style={{ width: `${mastery[name] * 20}%` }} /></i>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
