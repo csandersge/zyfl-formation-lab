@@ -14,6 +14,8 @@ type HModifier = "A" | "B" | "C" | "D" | "1" | "2" | "3" | "4";
 type HHistory = Record<HModifier, { correct: number; incorrect: number }>;
 type CarrierHistory = Record<CarrierDigit, { correct: number; incorrect: number }>;
 type LocationHistory = Record<LocationDigit, { correct: number; incorrect: number }>;
+type CarrierMastery = Partial<Record<BallCarrier, number>>;
+type RunLocationMastery = Partial<Record<LocationDigit, number>>;
 type HSpot = { c: number; r: number };
 type FormationName = "Right" | "Left" | "Rip" | "Liz" | "Rock" | "Lex";
 type Cell = `${number}-${number}`;
@@ -36,7 +38,6 @@ type ApprovedRunPlay = {
 };
 
 const FORMATION_NAMES: FormationName[] = ["Right", "Rip", "Rock", "Left", "Liz", "Lex"];
-const APPROVED_RUN_FORMATIONS: FormationName[] = ["Right", "Left", "Rip"];
 const EMPTY_MASTERY: Mastery = { Right: 0, Rip: 0, Rock: 0, Left: 0, Liz: 0, Lex: 0 };
 const EMPTY_CARD_STATE: CardState = { phase1: false, phase2: false, phase3: false, phase4: false };
 const H_MODIFIERS: HModifier[] = ["A", "B", "C", "D", "1", "2", "3", "4"];
@@ -81,6 +82,18 @@ const APPROVED_RUN_PLAYS: ApprovedRunPlay[] = [
   { id: "rip-3-28", displayCall: "Rip 3 28", formation: "Rip", hModifier: "3", displayedRunNumber: "28", carrier: "F", runLocationDigit: "8", concept: "Outside Zone Right", specialType: null, activePhase4: true, activePhase5: true },
   { id: "rip-3-48-reverse-right", displayCall: "Rip 3 48 Reverse Right", formation: "Rip", hModifier: "3", displayedRunNumber: "48", carrier: "H", runLocationDigit: "8", concept: "Outside Zone Right", specialType: "reverse", activePhase4: true, activePhase5: true },
 ];
+const REQUIRED_PHASE4_CARRIERS = BALL_CARRIERS.filter((carrier) =>
+  APPROVED_RUN_PLAYS.some((play) => play.activePhase4 && play.carrier === carrier),
+);
+const REQUIRED_PHASE5_RUN_DIGITS = LOCATION_DIGITS.filter((digit) =>
+  APPROVED_RUN_PLAYS.some((play) => play.activePhase5 && play.runLocationDigit === digit),
+);
+const EMPTY_PHASE4_CARRIER_MASTERY = Object.fromEntries(
+  REQUIRED_PHASE4_CARRIERS.map((carrier) => [carrier, 0]),
+) as CarrierMastery;
+const EMPTY_PHASE5_RUN_LOCATION_MASTERY = Object.fromEntries(
+  REQUIRED_PHASE5_RUN_DIGITS.map((digit) => [digit, 0]),
+) as RunLocationMastery;
 const EMPTY_H_HISTORY: HHistory = Object.fromEntries(
   H_MODIFIERS.map((modifier) => [modifier, { correct: 0, incorrect: 0 }]),
 ) as HHistory;
@@ -224,12 +237,32 @@ function readLocationHistory(value: unknown): LocationHistory {
   })) as LocationHistory;
 }
 
+function readCarrierMastery(value: unknown, completed = false): CarrierMastery {
+  const source = value && typeof value === "object" ? value as CarrierMastery : {};
+  return Object.fromEntries(REQUIRED_PHASE4_CARRIERS.map((carrier) => [
+    carrier,
+    completed ? 5 : clampMastery(source[carrier]),
+  ])) as CarrierMastery;
+}
+
+function readRunLocationMastery(value: unknown, completed = false): RunLocationMastery {
+  const source = value && typeof value === "object" ? value as RunLocationMastery : {};
+  return Object.fromEntries(REQUIRED_PHASE5_RUN_DIGITS.map((digit) => [
+    digit,
+    completed ? 5 : clampMastery(source[digit]),
+  ])) as RunLocationMastery;
+}
+
 function phaseMastered(mastery: Mastery) {
   return FORMATION_NAMES.every((name) => mastery[name] >= 5);
 }
 
-function runPhaseMastered(mastery: Mastery) {
-  return APPROVED_RUN_FORMATIONS.every((name) => mastery[name] >= 5);
+function phase4Mastered(mastery: CarrierMastery) {
+  return REQUIRED_PHASE4_CARRIERS.every((carrier) => (mastery[carrier] ?? 0) >= 5);
+}
+
+function phase5Mastered(mastery: RunLocationMastery) {
+  return REQUIRED_PHASE5_RUN_DIGITS.every((digit) => (mastery[digit] ?? 0) >= 5);
 }
 
 function cardKeyForPhase(phase: CardPhase): CardKey {
@@ -283,9 +316,8 @@ function pickWeightedFormation(mastery: Mastery, previous?: FormationName, repea
 
 function pickApprovedRunPlay(
   phase: 4 | 5,
-  mastery: Mastery,
-  carrierHistory: CarrierHistory,
-  locationHistory: LocationHistory,
+  carrierMastery: CarrierMastery,
+  runLocationMastery: RunLocationMastery,
   previousPlayId?: string,
   playRepeatCount = 0,
   previousFormation?: FormationName,
@@ -299,14 +331,9 @@ function pickApprovedRunPlay(
   if (withoutRepeatedFormation.length) candidates = withoutRepeatedFormation;
 
   const pool = candidates.flatMap((play) => {
-    const carrierItem = carrierHistory[CARRIER_DIGIT_FOR_PLAYER[play.carrier]];
-    const locationItem = locationHistory[play.runLocationDigit];
-    const formationWeight = mastery[play.formation] >= 5 ? 1 : 6 - mastery[play.formation];
-    const carrierWeight = Math.max(1, 3 + carrierItem.incorrect * 2 - Math.min(carrierItem.correct, 2));
-    const locationWeight = phase === 5
-      ? Math.max(1, 3 + locationItem.incorrect * 2 - Math.min(locationItem.correct, 2))
-      : 1;
-    const weight = Math.min(24, formationWeight + carrierWeight + locationWeight);
+    const weight = phase === 4
+      ? Math.max(1, 6 - (carrierMastery[play.carrier] ?? 0))
+      : Math.max(1, 6 - (runLocationMastery[play.runLocationDigit] ?? 0));
     return Array.from({ length: weight }, () => play);
   });
   return pool[Math.floor(Math.random() * pool.length)] ?? eligible[0];
@@ -330,6 +357,8 @@ export default function Home() {
   const [p3Mastery, setP3Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [p4Mastery, setP4Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [p5Mastery, setP5Mastery] = useState<Mastery>(EMPTY_MASTERY);
+  const [phase4CarrierMastery, setPhase4CarrierMastery] = useState<CarrierMastery>(EMPTY_PHASE4_CARRIER_MASTERY);
+  const [phase5RunLocationMastery, setPhase5RunLocationMastery] = useState<RunLocationMastery>(EMPTY_PHASE5_RUN_LOCATION_MASTERY);
   const [phase2Unlocked, setPhase2Unlocked] = useState(false);
   const [phase3Unlocked, setPhase3Unlocked] = useState(false);
   const [phase4Unlocked, setPhase4Unlocked] = useState(false);
@@ -372,20 +401,27 @@ export default function Home() {
       const savedCarrierHistory = readCarrierHistory(saved.carrierDigitHistory);
       const savedLocationHistory = readLocationHistory(saved.runLocationHistory);
       const savedRevealSeen = readCardState(saved.cardRevealSeen);
+      const savedCards = readCardState(saved.unlockedCards);
+      const legacyPhase4Complete = Boolean(saved.phase4Mastered) || phaseMastered(savedP4);
+      const legacyPhase5Complete = Boolean(saved.phase5Mastered) || phaseMastered(savedP5);
+      const savedPhase4CarrierMastery = readCarrierMastery(saved.phase4CarrierMastery, legacyPhase4Complete);
+      const savedPhase5RunLocationMastery = readRunLocationMastery(saved.phase5RunLocationMastery, legacyPhase5Complete);
       const masteryCards: CardState = {
         phase1: phaseMastered(savedP1),
         phase2: phaseMastered(savedP2),
         phase3: phaseMastered(savedP3),
-        phase4: runPhaseMastered(savedP4),
+        phase4: phase4Mastered(savedPhase4CarrierMastery),
       };
       const migratedCards = Object.fromEntries(
-        CARD_KEYS.map((key) => [key, masteryCards[key]]),
+        CARD_KEYS.map((key) => [key, savedCards[key] || masteryCards[key]]),
       ) as CardState;
       setP1Mastery(savedP1);
       setP2Mastery(savedP2);
       setP3Mastery(savedP3);
       setP4Mastery(savedP4);
       setP5Mastery(savedP5);
+      setPhase4CarrierMastery(savedPhase4CarrierMastery);
+      setPhase5RunLocationMastery(savedPhase5RunLocationMastery);
       setHHistory(savedHHistory);
       setCarrierHistory(savedCarrierHistory);
       setLocationHistory(savedLocationHistory);
@@ -394,12 +430,12 @@ export default function Home() {
       setPhase2Unlocked(Boolean(saved.phase2Unlocked) || phaseMastered(savedP1));
       setPhase3Unlocked(Boolean(saved.phase3Unlocked) || phaseMastered(savedP2));
       setPhase4Unlocked(Boolean(saved.phase4Unlocked) || phaseMastered(savedP3));
-      setPhase5Unlocked(Boolean(saved.phase5Unlocked) || runPhaseMastered(savedP4));
+      setPhase5Unlocked(Boolean(saved.phase5Unlocked) || phase4Mastered(savedPhase4CarrierMastery));
       const firstUnseen = CARD_KEYS.find((key) => migratedCards[key] && !savedRevealSeen[key]);
       if (firstUnseen) setPendingReveal(firstUnseen);
       setFormation(pickWeightedFormation(savedP1));
       setHModifier(pickWeightedModifier(savedHHistory));
-      setSelectedRunPlay(pickApprovedRunPlay(4, savedP4, savedCarrierHistory, savedLocationHistory));
+      setSelectedRunPlay(pickApprovedRunPlay(4, savedPhase4CarrierMastery, savedPhase5RunLocationMastery));
     } catch {
       setFormation(pickWeightedFormation(EMPTY_MASTERY));
     }
@@ -409,7 +445,8 @@ export default function Home() {
   useEffect(() => {
     if (!ready) return;
     localStorage.setItem("zyfl-progress", JSON.stringify({
-      version: 6,
+      version: 7,
+      progressSchemaVersion: 2,
       phase1Mastery: p1Mastery,
       phase1Mastered: phaseMastered(p1Mastery),
       phase2Unlocked,
@@ -420,17 +457,21 @@ export default function Home() {
       phase3Mastered: phaseMastered(p3Mastery),
       phase4Unlocked,
       phase4Mastery: p4Mastery,
-      phase4Mastered: runPhaseMastered(p4Mastery),
+      phase4Mastered: phase4Mastered(phase4CarrierMastery),
+      phase4CarrierMastery,
+      legacyPhase4FormationMastery: p4Mastery,
       phase5Unlocked,
       phase5Mastery: p5Mastery,
-      phase5Mastered: runPhaseMastered(p5Mastery),
+      phase5Mastered: phase5Mastered(phase5RunLocationMastery),
+      phase5RunLocationMastery,
+      legacyPhase5FormationMastery: p5Mastery,
       hModifierHistory: hHistory,
       carrierDigitHistory: carrierHistory,
       runLocationHistory: locationHistory,
       unlockedCards,
       cardRevealSeen,
     }));
-  }, [p1Mastery, p2Mastery, p3Mastery, p4Mastery, p5Mastery, phase2Unlocked, phase3Unlocked, phase4Unlocked, phase5Unlocked, hHistory, carrierHistory, locationHistory, unlockedCards, cardRevealSeen, ready]);
+  }, [p1Mastery, p2Mastery, p3Mastery, p4Mastery, p5Mastery, phase4CarrierMastery, phase5RunLocationMastery, phase2Unlocked, phase3Unlocked, phase4Unlocked, phase5Unlocked, hHistory, carrierHistory, locationHistory, unlockedCards, cardRevealSeen, ready]);
 
   useEffect(() => {
     if (!celebration) return;
@@ -461,7 +502,7 @@ export default function Home() {
     window.setTimeout(() => detailRef.current?.querySelector<HTMLButtonElement>("button")?.focus(), 0);
   }, [detailCard]);
 
-  const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : phase === 3 ? p3Mastery : phase === 4 ? p4Mastery : p5Mastery;
+  const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : p3Mastery;
   const correctCell = currentPlayer === "H" ? null : FORMATIONS[formation].players[currentPlayer];
   const correctHSpot = getHSpot(formation, hModifier);
   const ballCarrier = selectedRunPlay.carrier;
@@ -545,23 +586,23 @@ export default function Home() {
         return next;
       });
     } else if (targetPhase === 4) {
-      setP4Mastery((current) => {
-        const phaseWasMastered = runPhaseMastered(current);
-        const wasMastered = current[formation] >= 5;
-        const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
-        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 4!`);
-        if (!phase5Unlocked && runPhaseMastered(next)) {
+      setPhase4CarrierMastery((current) => {
+        const phaseWasMastered = phase4Mastered(current);
+        const wasMastered = (current[ballCarrier] ?? 0) >= 5;
+        const next = { ...current, [ballCarrier]: Math.min(5, (current[ballCarrier] ?? 0) + 1) };
+        if (!wasMastered && next[ballCarrier] === 5) setCelebration(`${ballCarrier} mastered in Phase 4!`);
+        if (!phase5Unlocked && phase4Mastered(next)) {
           setPhase5Unlocked(true);
           setCelebration("Phase 5 unlocked! The second digit tells where the runner is going.");
         }
-        if (!phaseWasMastered && runPhaseMastered(next)) unlockCard(4);
+        if (!phaseWasMastered && phase4Mastered(next)) unlockCard(4);
         return next;
       });
     } else {
-      setP5Mastery((current) => {
-        const wasMastered = current[formation] >= 5;
-        const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
-        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Phase 5!`);
+      setPhase5RunLocationMastery((current) => {
+        const wasMastered = (current[locationDigit] ?? 0) >= 5;
+        const next = { ...current, [locationDigit]: Math.min(5, (current[locationDigit] ?? 0) + 1) };
+        if (!wasMastered && next[locationDigit] === 5) setCelebration(`${locationDigit} · ${selectedRunPlay.concept} mastered in Phase 5!`);
         return next;
       });
     }
@@ -694,9 +735,8 @@ export default function Home() {
     if (nextPhase === 4 || nextPhase === 5) {
       const nextPlay = pickApprovedRunPlay(
         nextPhase,
-        mastery,
-        carrierHistory,
-        locationHistory,
+        phase4CarrierMastery,
+        phase5RunLocationMastery,
         selectedRunPlay.id,
         runPlayRepeatCount,
         selectedRunPlay.formation,
@@ -863,7 +903,7 @@ export default function Home() {
             </button>
             <button className={phase === 5 ? "phase-active" : ""} onClick={() => choosePhase(5)} disabled={!phase5Unlocked}>
               <span>Phase 5 {phase5Unlocked ? "✓" : "🔒"}</span><b>Identify the Run Location</b>
-              {!phase5Unlocked && <small>Master Right, Left, and Rip in Phase 4 to unlock run-location training</small>}
+              {!phase5Unlocked && <small>Master every active ball carrier in Phase 4 to unlock run-location training</small>}
               <small className="phase-reward">Reward coming in Phase 5B</small>
             </button>
           </div>
@@ -1018,7 +1058,11 @@ export default function Home() {
             )}
           </div>
 
-          <MasteryTracker phase={phase} mastery={activeMastery} />
+          {phase <= 3
+            ? <MasteryTracker phase={phase} mastery={activeMastery} />
+            : phase === 4
+              ? <CarrierMasteryTracker mastery={phase4CarrierMastery} />
+              : <RunLocationMasteryTracker mastery={phase5RunLocationMastery} />}
         </section>
       )}
 
@@ -1144,20 +1188,66 @@ export default function Home() {
 }
 
 function MasteryTracker({ phase, mastery }: { phase: Phase; mastery: Mastery }) {
-  const trackedFormations = phase >= 4 ? APPROVED_RUN_FORMATIONS : FORMATION_NAMES;
   return (
     <section className="mastery-panel" aria-label={`Phase ${phase} mastery`}>
       <div className="mastery-heading">
         <div><p className="eyebrow">Phase {phase} progress</p><h2>Formation Mastery</h2></div>
-        <span>{trackedFormations.filter((name) => mastery[name] >= 5).length}/{trackedFormations.length} mastered</span>
+        <span>{FORMATION_NAMES.filter((name) => mastery[name] >= 5).length}/6 mastered</span>
       </div>
       <div className="mastery-grid">
-        {trackedFormations.map((name) => {
+        {FORMATION_NAMES.map((name) => {
           const complete = mastery[name] >= 5;
           return (
             <div key={name} className={`mastery-item ${complete ? "mastered" : ""}`}>
               <div><b>{complete ? "✓ " : ""}{name}</b><span>{complete ? "Mastered" : `${mastery[name]}/5`}</span></div>
               <i><span style={{ width: `${mastery[name] * 20}%` }} /></i>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function CarrierMasteryTracker({ mastery }: { mastery: CarrierMastery }) {
+  return (
+    <section className="mastery-panel" aria-label="Phase 4 ball-carrier mastery">
+      <div className="mastery-heading">
+        <div><p className="eyebrow">Phase 4 progress</p><h2>Ball Carrier Mastery</h2></div>
+        <span>{REQUIRED_PHASE4_CARRIERS.filter((carrier) => (mastery[carrier] ?? 0) >= 5).length}/{REQUIRED_PHASE4_CARRIERS.length} mastered</span>
+      </div>
+      <div className="mastery-grid">
+        {REQUIRED_PHASE4_CARRIERS.map((carrier) => {
+          const count = mastery[carrier] ?? 0;
+          const complete = count >= 5;
+          return (
+            <div key={carrier} className={`mastery-item ${complete ? "mastered" : ""}`}>
+              <div><b>{complete ? "✓ " : ""}{carrier}</b><span>{complete ? "Mastered" : `${count}/5`}</span></div>
+              <i><span style={{ width: `${count * 20}%` }} /></i>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function RunLocationMasteryTracker({ mastery }: { mastery: RunLocationMastery }) {
+  return (
+    <section className="mastery-panel" aria-label="Phase 5 run-location mastery">
+      <div className="mastery-heading">
+        <div><p className="eyebrow">Phase 5 progress</p><h2>Run Location Mastery</h2></div>
+        <span>{REQUIRED_PHASE5_RUN_DIGITS.filter((digit) => (mastery[digit] ?? 0) >= 5).length}/{REQUIRED_PHASE5_RUN_DIGITS.length} mastered</span>
+      </div>
+      <div className="mastery-grid">
+        {REQUIRED_PHASE5_RUN_DIGITS.map((digit) => {
+          const count = mastery[digit] ?? 0;
+          const complete = count >= 5;
+          const location = RUN_LOCATION_MAP[digit];
+          return (
+            <div key={digit} className={`mastery-item ${complete ? "mastered" : ""}`}>
+              <div><b>{complete ? "✓ " : ""}{digit} · {location.concept} {location.side}</b><span>{complete ? "Mastered" : `${count}/5`}</span></div>
+              <i><span style={{ width: `${count * 20}%` }} /></i>
             </div>
           );
         })}

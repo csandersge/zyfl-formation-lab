@@ -44,7 +44,15 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   assert.doesNotMatch(page, /pickWeightedCarrier|pickWeightedLocation|makeRunNumber/);
   assert.doesNotMatch(page, /"6-8"|"6-12"|label: "F", row:/);
   assert.match(page, /carrierDigitHistory/);
-  assert.match(page, /version:\s*6/);
+  assert.match(page, /version:\s*7/);
+  assert.match(page, /progressSchemaVersion:\s*2/);
+  assert.match(page, /phase4CarrierMastery/);
+  assert.match(page, /phase5RunLocationMastery/);
+  assert.match(page, /REQUIRED_PHASE4_CARRIERS/);
+  assert.match(page, /REQUIRED_PHASE5_RUN_DIGITS/);
+  assert.match(page, /Ball Carrier Mastery/);
+  assert.match(page, /Run Location Mastery/);
+  assert.doesNotMatch(page, /APPROVED_RUN_FORMATIONS/);
   assert.match(page, /runLocationHistory/);
   assert.match(page, /Where is the runner going\?/);
   assert.match(page, /unlockedCards/);
