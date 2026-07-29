@@ -40,6 +40,7 @@ test("includes Phase 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /unlockedCards/);
   assert.match(page, /cardRevealSeen/);
   assert.match(page, /My Cards/);
+  assert.doesNotMatch(page, /image:\s*"\/assets\/cards\//);
   assert.doesNotMatch(page, /Build My Team/);
   assert.match(page, /role="dialog"/);
   assert.match(page, /aria-modal="true"/);

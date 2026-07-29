@@ -108,22 +108,22 @@ const CARD_DATA: Record<CardKey, {
 }> = {
   phase1: {
     phase: 1, rarity: "Rookie", title: "Edge Alignment", theme: "Tight End / Y Position",
-    image: "/assets/cards/phase-1-rookie-edge-alignment.png",
+    image: "assets/cards/phase-1-rookie-edge-alignment.png",
     alt: "Rookie Edge Alignment football card unlocked for mastering Phase 1",
   },
   phase2: {
     phase: 2, rarity: "Pro", title: "Perimeter Playmaker", theme: "Wide Receiver / Y, X, and Z",
-    image: "/assets/cards/phase-2-pro-perimeter-playmaker.png",
+    image: "assets/cards/phase-2-pro-perimeter-playmaker.png",
     alt: "Pro Perimeter Playmaker football card unlocked for mastering Phase 2",
   },
   phase3: {
     phase: 3, rarity: "Elite", title: "Hybrid Force", theme: "H-Back",
-    image: "/assets/cards/phase-3-elite-hybrid-force.png",
+    image: "assets/cards/phase-3-elite-hybrid-force.png",
     alt: "Elite Hybrid Force football card unlocked for mastering Phase 3",
   },
   phase4: {
     phase: 4, rarity: "Legendary", title: "Ball Carrier Mastery", theme: "Ball Carrier",
-    image: "/assets/cards/phase-4-legendary-ball-carrier-mastery.png",
+    image: "assets/cards/phase-4-legendary-ball-carrier-mastery.png",
     alt: "Legendary Ball Carrier Mastery football card unlocked for mastering Phase 4",
   },
 };
