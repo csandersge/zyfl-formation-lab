@@ -124,7 +124,7 @@ h1, h2, p { margin-top: 0; }
 .carrier-quiz:focus { outline: none; }
 .carrier-quiz h2 { margin: 0; color: var(--gold); font-size: clamp(30px, 5vw, 46px); letter-spacing: -.035em; text-transform: uppercase; }
 .carrier-quiz h3 { margin: 12px 0 18px; font-size: clamp(19px, 3vw, 25px); }
-.carrier-answers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.carrier-answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .carrier-answers button { min-height: 58px; border: 2px solid rgba(255,255,255,.22); border-radius: 13px; background: rgba(255,255,255,.07); color: white; font-size: 20px; font-weight: 900; cursor: pointer; }
 .carrier-answers button:hover:not(:disabled), .carrier-answers button:focus-visible { border-color: var(--gold); background: rgba(247,200,67,.14); outline: none; }
 .carrier-answers button.correct-answer { border-color: var(--green-bright); color: #071c12; background: var(--green-bright); }

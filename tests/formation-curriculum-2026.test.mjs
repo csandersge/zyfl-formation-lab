@@ -110,7 +110,7 @@ test("Levels 1-3 derive categories, targets, and least-mastered selection from a
   assert.equal(getCurriculumMasteryTarget(3, "D Same Side as Y"), 5);
 
   const mastery = { "4 Opposite Y": 5, "D Same Side as Y": 0 };
-  const selected = selectCurriculumFormation(3, mastery, {}, "Rap D");
+  const selected = selectCurriculumFormation(3, mastery, {}, "rap-d");
   assert.equal(getCurriculumMasteryCategory(3, selected), "D Same Side as Y");
   assert.notEqual(selected.id, "rap-d");
   assert.equal(curriculumLevelMastered(3, mastery), false);
