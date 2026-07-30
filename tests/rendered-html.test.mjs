@@ -53,14 +53,20 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.doesNotMatch(selectableTargets, /"1-4"|"1-16"/);
   assert.match(selectableTargets, /"2-4"/);
   assert.match(selectableTargets, /"2-16"/);
-  assert.match(page, /const EXCLUDED_LEVEL3_COMBINATIONS = new Set\(\[\s*"Liz C",\s*"Rip C",\s*"Rock D",\s*"Lex D",\s*\]\)/);
-  assert.match(page, /level === 3 && formation && !level3CombinationAllowed\(formation, modifier\)/);
-  assert.match(page, /pickWeightedModifier\(hHistory, hModifier, hRepeatCount, nextFormation, nextPhase\)/);
+  assert.doesNotMatch(page, /EXCLUDED_LEVEL3_COMBINATIONS|level3CombinationAllowed|pickWeightedModifier|pickWeightedFormation/);
+  assert.match(page, /selectCurriculumFormation\(/);
+  assert.match(page, /selectedCurriculumFormation\.coordinates\[currentPlayer\]/);
+  assert.match(page, /selectedCurriculumFormation\.coordinates\.H/);
+  assert.match(page, /CURRICULUM_SELECTABLE/);
+  assert.match(page, /CURRICULUM_H_TARGETS/);
   assert.doesNotMatch(page, /earlyLevelCombinationAllowed/);
   assert.match(page, /setHModifier\(nextPlay\.hModifier\)/);
   assert.match(page, /carrierDigitHistory/);
-  assert.match(page, /version:\s*7/);
-  assert.match(page, /progressSchemaVersion:\s*2/);
+  assert.match(page, /version:\s*8/);
+  assert.match(page, /progressSchemaVersion:\s*3/);
+  assert.match(page, /formationCurriculumVersion: "2026-fourth-grade"/);
+  assert.match(page, /level1Curriculum2026Mastery/);
+  assert.match(page, /formationCurriculum2026Exposure/);
   assert.match(page, /phase4CarrierMastery/);
   assert.match(page, /phase5RunLocationMastery/);
   assert.match(page, /REQUIRED_PHASE4_CARRIERS/);
@@ -88,9 +94,8 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /phase5Mastered\(next\)\) handleLevelMastery\(5\)/);
   assert.match(page, /function advanceToNextLevel\(currentLevel: Phase\)/);
   assert.match(page, /function handleLevelMastery\(levelNumber: Phase\)/);
-  assert.equal((page.match(/handleLevelMastery\([1-5]\)/g) ?? []).length, 5);
+  assert.match(page, /handleLevelMastery\(curriculumLevel\)/);
   assert.match(page, /if \(!pendingLevelAdvance \|\| pendingReveal\) return/);
-  assert.match(page, /if \(!phaseWasMastered && phaseMastered\(next\)\) handleLevelMastery\(1\)/);
   assert.match(page, /if \(!phaseWasMastered && phase4Mastered\(next\)\) handleLevelMastery\(4\)/);
   assert.match(page, /const LEVEL_CONFIG: Array/);
   assert.equal((page.match(/\{ level: [1-5], title:/g) ?? []).length, 5);
@@ -145,24 +150,12 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(css, /\.card-slot\.rarity-mythic/);
 });
 
-test("Level 3 overlap exclusions preserve valid calls for every formation", () => {
-  const formations = ["Right", "Rip", "Rock", "Left", "Liz", "Lex"];
-  const modifiers = ["A", "B", "C", "D", "1", "2", "3", "4"];
-  const excluded = new Set(["Liz C", "Rip C", "Rock D", "Lex D"]);
-
-  const validCounts = Object.fromEntries(
-    formations.map((formation) => [
-      formation,
-      modifiers.filter((modifier) => !excluded.has(`${formation} ${modifier}`)).length,
-    ]),
-  );
-
-  assert.deepEqual(validCounts, {
-    Right: 8,
-    Rip: 7,
-    Rock: 7,
-    Left: 8,
-    Liz: 7,
-    Lex: 7,
-  });
+test("Levels 1-3 use complete centralized calls without arbitrary modifier generation", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(page, /ACTIVE_2026_FORMATIONS/);
+  assert.match(page, /selectedCurriculumFormation\.displayCall/);
+  assert.doesNotMatch(page, /`\$\{formation\}.*\$\{hModifier\}/);
+  assert.match(page, /nextPhase === 3 \? "H" : "Y"/);
+  assert.match(page, /4 means opposite Y\. D means the same side as Y\./);
+  assert.match(page, /nextAvailableLevel\(currentLevel\)/);
 });

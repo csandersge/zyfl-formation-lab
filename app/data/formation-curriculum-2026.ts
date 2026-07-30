@@ -59,7 +59,7 @@ export type FormationCurriculumEntry = {
   hModifier: FormationCurriculumModifier;
   introducedAt: FormationCurriculumGrade;
   cumulativeForFourthGrade: true;
-  active: false;
+  active: boolean;
   yAlignment: {
     side: FormationSide;
     type: YAlignmentType;
@@ -336,10 +336,15 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
           : source.formation === "Rap" || source.formation === "Lap"
             ? "Row 1 preserves the on-line slot distinction from the off-line Rock/Lex row 2 alignment."
             : undefined;
+  const active =
+    gridCompatibility !== "unresolved"
+    && gridCompatibility !== "requires-adjustment"
+    && coordinateWarnings.length === 0
+    && Object.values(coordinates).every((coordinate) => coordinate !== null);
   return {
     ...source,
     cumulativeForFourthGrade: true,
-    active: false,
+    active,
     yAlignment: {
       side: family.ySide,
       type: family.yAlignmentType,
@@ -395,6 +400,109 @@ export const APPROVED_2026_FOURTH_GRADE_FORMATIONS: readonly FormationCurriculum
   createCurriculumEntry({ id: "lucky-d", displayCall: "Lucky D", formation: "Lucky", hModifier: "D", introducedAt: "4th Grade" }),
 ];
 
+export const ACTIVE_2026_FORMATIONS = APPROVED_2026_FOURTH_GRADE_FORMATIONS.filter(
+  (entry) =>
+    entry.active
+    && entry.gridCompatibility !== "unresolved"
+    && entry.gridCompatibility !== "requires-adjustment"
+    && entry.coordinateWarnings.length === 0,
+);
+
+export const EXCLUDED_2026_FORMATIONS = APPROVED_2026_FOURTH_GRADE_FORMATIONS.filter(
+  (entry) => !ACTIVE_2026_FORMATIONS.includes(entry),
+);
+
+export type CurriculumLevel = 1 | 2 | 3;
+export type CurriculumMastery = Record<string, number>;
+export type CurriculumExposure = Record<string, number>;
+
+function receiverCoordinateSignature(entry: FormationCurriculumEntry) {
+  return (["Y", "X", "Z"] as const)
+    .map((player) => {
+      const coordinate = entry.coordinates[player];
+      return coordinate ? `${coordinate.r}-${coordinate.c}` : "unresolved";
+    })
+    .join("|");
+}
+
+export function getCurriculumMasteryCategory(level: CurriculumLevel, entry: FormationCurriculumEntry) {
+  if (level === 1) return entry.formation;
+  if (level === 2) {
+    const familySignatures = new Set(
+      ACTIVE_2026_FORMATIONS
+        .filter((candidate) => candidate.formation === entry.formation)
+        .map(receiverCoordinateSignature),
+    );
+    return familySignatures.size === 1 ? entry.formation : entry.id;
+  }
+  if (entry.hModifier === "4") return "4 Opposite Y";
+  if (entry.hModifier === "D") return "D Same Side as Y";
+  return `${entry.formation} H Alignment`;
+}
+
+export function getCurriculumMasteryCategories(level: CurriculumLevel) {
+  return [...new Set(ACTIVE_2026_FORMATIONS.map((entry) => getCurriculumMasteryCategory(level, entry)))];
+}
+
+export function getCurriculumMasteryTarget(level: CurriculumLevel, category: string) {
+  const exampleCount = ACTIVE_2026_FORMATIONS.filter(
+    (entry) => getCurriculumMasteryCategory(level, entry) === category,
+  ).length;
+  if (exampleCount >= 3) return 5;
+  if (exampleCount === 2) return 4;
+  if (exampleCount === 1) return 3;
+  return 0;
+}
+
+export function curriculumLevelMastered(level: CurriculumLevel, mastery: CurriculumMastery) {
+  return getCurriculumMasteryCategories(level).every(
+    (category) => (mastery[category] ?? 0) >= getCurriculumMasteryTarget(level, category),
+  );
+}
+
+export function selectCurriculumFormation(
+  level: CurriculumLevel,
+  mastery: CurriculumMastery,
+  exposure: CurriculumExposure,
+  previousId?: string,
+) {
+  const categories = getCurriculumMasteryCategories(level);
+  const incomplete = categories
+    .map((category) => ({
+      category,
+      score: mastery[category] ?? 0,
+      target: getCurriculumMasteryTarget(level, category),
+    }))
+    .filter(({ score, target }) => score < target);
+  const considered = incomplete.length ? incomplete : categories.map((category) => ({
+    category,
+    score: mastery[category] ?? 0,
+    target: getCurriculumMasteryTarget(level, category),
+  }));
+  const lowestRatio = Math.min(...considered.map(({ score, target }) => score / Math.max(1, target)));
+  const priorityCategories = new Set(
+    considered.filter(({ score, target }) => score / Math.max(1, target) === lowestRatio).map(({ category }) => category),
+  );
+  let candidates = ACTIVE_2026_FORMATIONS.filter(
+    (entry) => priorityCategories.has(getCurriculumMasteryCategory(level, entry)),
+  );
+  const lowestExposure = Math.min(...candidates.map((entry) => exposure[entry.id] ?? 0));
+  candidates = candidates.filter((entry) => (exposure[entry.id] ?? 0) === lowestExposure);
+  const withoutRepeat = candidates.filter((entry) => entry.id !== previousId);
+  if (withoutRepeat.length) {
+    candidates = withoutRepeat;
+  } else {
+    const samePriorityAlternatives = ACTIVE_2026_FORMATIONS.filter(
+      (entry) =>
+        entry.id !== previousId &&
+        priorityCategories.has(getCurriculumMasteryCategory(level, entry)),
+    );
+    const anyAlternative = ACTIVE_2026_FORMATIONS.filter((entry) => entry.id !== previousId);
+    candidates = samePriorityAlternatives.length ? samePriorityAlternatives : anyAlternative;
+  }
+  return candidates[Math.floor(Math.random() * candidates.length)] ?? ACTIVE_2026_FORMATIONS[0];
+}
+
 export const FORMATION_GRID_COMPATIBILITY_REPORT = {
   grid: { columns: 19, rows: 6 },
   markerDiameter: "clamp(31px, 4vw, 48px)",
@@ -423,7 +531,12 @@ export function validateApproved2026FourthGradeFormations(
   if (entries.some((entry) => (entry.formation === "Ray" || entry.formation === "Larry") && entry.hModifier !== null)) {
     throw new Error("Ray and Larry must not have H modifiers.");
   }
-  if (entries.some((entry) => entry.active)) throw new Error("The 2026 formation curriculum must remain inactive.");
+  if (entries.some((entry) => entry.active && (
+    entry.gridCompatibility === "unresolved"
+    || entry.gridCompatibility === "requires-adjustment"
+    || entry.coordinateWarnings.length > 0
+    || Object.values(entry.coordinates).some((coordinate) => coordinate === null)
+  ))) throw new Error("Only complete, compatible 2026 formations may be active.");
   if (entries.some((entry) => Object.values(entry.coordinates).some((coordinate) =>
     coordinate !== null && (coordinate.c < 1 || coordinate.c > 19 || coordinate.r < 1 || coordinate.r > 6)
   ))) throw new Error("Formation curriculum contains coordinates outside the 19×6 grid.");

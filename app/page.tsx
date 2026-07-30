@@ -1,6 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ACTIVE_2026_FORMATIONS,
+  FORMATION_FAMILY_DEFINITIONS,
+  type CurriculumExposure,
+  type CurriculumLevel,
+  type CurriculumMastery,
+  type FormationCurriculumEntry,
+  type GridCoordinate,
+  curriculumLevelMastered,
+  getCurriculumMasteryCategories,
+  getCurriculumMasteryCategory,
+  getCurriculumMasteryTarget,
+  selectCurriculumFormation,
+} from "./data/formation-curriculum-2026";
 
 type Tab = "play" | "cards" | "help";
 type Phase = 1 | 2 | 3 | 4 | 5;
@@ -44,12 +58,6 @@ const H_MODIFIERS: HModifier[] = ["A", "B", "C", "D", "1", "2", "3", "4"];
 const CARRIER_DIGITS: CarrierDigit[] = ["1", "2", "4", "5", "6", "7"];
 const LOCATION_DIGITS: LocationDigit[] = ["0", "1", "4", "5", "6", "7", "8", "9"];
 const BALL_CARRIERS: BallCarrier[] = ["QB", "F", "H", "Y", "X", "Z"];
-const EXCLUDED_LEVEL3_COMBINATIONS = new Set([
-  "Liz C",
-  "Rip C",
-  "Rock D",
-  "Lex D",
-]);
 const CARRIER_DIGIT_FOR_PLAYER: Record<BallCarrier, CarrierDigit> = {
   QB: "1", F: "2", H: "4", Y: "5", X: "6", Z: "7",
 };
@@ -161,6 +169,35 @@ const SELECTABLE: Cell[] = [
   "1-2", "1-7", "1-13", "1-18",
   "2-2", "2-4", "2-7", "2-13", "2-16", "2-18",
 ];
+const CURRICULUM_SELECTABLE: Cell[] = [...new Set(
+  ACTIVE_2026_FORMATIONS.flatMap((entry) =>
+    (["Y", "X", "Z"] as const).flatMap((player) => {
+      const coordinate = entry.coordinates[player];
+      return coordinate ? [`${coordinate.r}-${coordinate.c}` as Cell] : [];
+    }),
+  ),
+)];
+const CURRICULUM_H_TARGETS = [...new Map(
+  ACTIVE_2026_FORMATIONS.flatMap((entry) => {
+    const coordinate = entry.coordinates.H;
+    return coordinate ? [[`${coordinate.r}-${coordinate.c}`, coordinate] as const] : [];
+  }),
+).values()];
+const ACTIVE_CURRICULUM_FAMILIES = [...new Set(
+  ACTIVE_2026_FORMATIONS.map((entry) => entry.formation),
+)];
+const curriculumFamilyShortLabel = (formation: FormationCurriculumEntry["formation"]) => {
+  const definition = FORMATION_FAMILY_DEFINITIONS[formation];
+  const alignment =
+    definition.yAlignmentType === "attached-tight-end"
+      ? "Attached Y"
+      : definition.yAlignmentType === "wing"
+        ? "Wing Y"
+        : definition.yLineStatus === "on-line"
+          ? "On-line slot Y"
+          : "Off-ball slot Y";
+  return `${alignment} ${definition.ySide}`;
+};
 const LANDMARKS = [
   { label: "9", after: 2 }, { label: "7", after: 6 }, { label: "5", after: 7 },
   { label: "3", after: 8 }, { label: "1", after: 9 }, { label: "0", after: 10 },
@@ -215,8 +252,8 @@ const LEVEL_CONFIG: Array<{
   lockedMessage?: string;
 }> = [
   { level: 1, title: "Place Y", reward: "Reward: Rookie Football Card", enabled: true },
-  { level: 2, title: "Place Y, X & Z", reward: "Reward: Pro Football Card", enabled: true, lockedMessage: "Master all six formations to unlock" },
-  { level: 3, title: "Add the H back", reward: "Reward: Elite Football Card", enabled: true, lockedMessage: "Master Level 2 to unlock H-back training" },
+  { level: 2, title: "Place Y, X & Z", reward: "Reward: Pro Football Card", enabled: true, lockedMessage: "Master the Level 1 formation families to unlock" },
+  { level: 3, title: "Add the H back", reward: "Reward: Elite Football Card", enabled: true, lockedMessage: "Master the Level 2 receiver formations to unlock" },
   { level: 4, title: "Identify the Ball Carrier", reward: "Reward: Legendary Football Card", enabled: false, lockedMessage: "Master all six formations in Level 3 to unlock ball-carrier training" },
   { level: 5, title: "Identify the Run Location", reward: "Reward: Lane Finder", enabled: false, lockedMessage: "Master every active ball carrier in Level 4 to unlock run-location training" },
 ];
@@ -291,6 +328,38 @@ function phaseMastered(mastery: Mastery) {
   return FORMATION_NAMES.every((name) => mastery[name] >= 5);
 }
 
+function coordinateCell(coordinate: GridCoordinate | null): Cell | null {
+  return coordinate ? `${coordinate.r}-${coordinate.c}` as Cell : null;
+}
+
+function readCurriculumMastery(
+  value: unknown,
+  level: CurriculumLevel,
+  legacyMastery?: Mastery,
+): CurriculumMastery {
+  const source = value && typeof value === "object" ? value as CurriculumMastery : null;
+  return Object.fromEntries(getCurriculumMasteryCategories(level).map((category) => {
+    const safelyMigratedLegacyScore =
+      !source
+      && level < 3
+      && FORMATION_NAMES.includes(category as FormationName)
+      ? legacyMastery?.[category as FormationName]
+      : undefined;
+    return [category, clampMastery(source?.[category] ?? safelyMigratedLegacyScore)];
+  }));
+}
+
+function readCurriculumExposure(value: unknown): Record<CurriculumLevel, CurriculumExposure> {
+  const source = value && typeof value === "object"
+    ? value as Partial<Record<CurriculumLevel, CurriculumExposure>>
+    : {};
+  return {
+    1: source[1] ?? {},
+    2: source[2] ?? {},
+    3: source[3] ?? {},
+  };
+}
+
 function getDynamicMasteryTarget(playCount: number) {
   if (playCount >= 3) return 5;
   if (playCount === 2) return 4;
@@ -354,36 +423,6 @@ function hTargetsForFormation(formation: FormationName) {
   return H_MODIFIERS.map((modifier) => ({ modifier, ...getHSpot(formation, modifier) }));
 }
 
-function level3CombinationAllowed(formation: FormationName, modifier: HModifier) {
-  return !EXCLUDED_LEVEL3_COMBINATIONS.has(`${formation} ${modifier}`);
-}
-
-function pickWeightedModifier(
-  history: HHistory,
-  previous?: HModifier,
-  repeatCount = 0,
-  formation?: FormationName,
-  level?: Phase,
-) {
-  const pool = H_MODIFIERS.flatMap((modifier) => {
-    if (level === 3 && formation && !level3CombinationAllowed(formation, modifier)) return [];
-    if (modifier === previous && repeatCount >= 2) return [];
-    const item = history[modifier];
-    const weight = Math.max(1, 3 + item.incorrect * 2 - Math.min(item.correct, 2));
-    return Array.from({ length: Math.min(weight, 15) }, () => modifier);
-  });
-  return pool[Math.floor(Math.random() * pool.length)] ?? "A";
-}
-
-function pickWeightedFormation(mastery: Mastery, previous?: FormationName, repeatCount = 0) {
-  const pool = FORMATION_NAMES.flatMap((name) => {
-    if (name === previous && repeatCount >= 2) return [];
-    const weight = mastery[name] >= 5 ? 1 : 6 - mastery[name];
-    return Array.from({ length: weight }, () => name);
-  });
-  return pool[Math.floor(Math.random() * pool.length)] ?? "Right";
-}
-
 function pickApprovedRunPlay(
   phase: 4 | 5,
   carrierMastery: CarrierMastery,
@@ -445,18 +484,28 @@ export default function Home() {
   const [tab, setTab] = useState<Tab>("play");
   const [phase, setPhase] = useState<Phase>(1);
   const [formation, setFormation] = useState<FormationName>("Right");
-  const [repeatCount, setRepeatCount] = useState(1);
   const [hModifier, setHModifier] = useState<HModifier>("A");
-  const [hRepeatCount, setHRepeatCount] = useState(1);
   const [currentPlayer, setCurrentPlayer] = useState<PlayerLabel>("Y");
   const [placements, setPlacements] = useState<Partial<Record<ReceiverLabel, Cell>>>({});
   const [hPlacement, setHPlacement] = useState<HModifier | null>(null);
+  const [curriculumHPlacement, setCurriculumHPlacement] = useState<GridCoordinate | null>(null);
   const [selected, setSelected] = useState<Cell | null>(null);
   const [answered, setAnswered] = useState(false);
   const [resultCorrect, setResultCorrect] = useState<boolean | null>(null);
   const [p1Mastery, setP1Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [p2Mastery, setP2Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [p3Mastery, setP3Mastery] = useState<Mastery>(EMPTY_MASTERY);
+  const [curriculumMastery, setCurriculumMastery] = useState<Record<CurriculumLevel, CurriculumMastery>>({
+    1: readCurriculumMastery(null, 1),
+    2: readCurriculumMastery(null, 2),
+    3: readCurriculumMastery(null, 3),
+  });
+  const [curriculumExposure, setCurriculumExposure] = useState<Record<CurriculumLevel, CurriculumExposure>>({
+    1: {}, 2: {}, 3: {},
+  });
+  const [selectedCurriculumFormation, setSelectedCurriculumFormation] = useState<FormationCurriculumEntry>(
+    ACTIVE_2026_FORMATIONS[0],
+  );
   const [p4Mastery, setP4Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [p5Mastery, setP5Mastery] = useState<Mastery>(EMPTY_MASTERY);
   const [phase4CarrierMastery, setPhase4CarrierMastery] = useState<CarrierMastery>(EMPTY_PHASE4_CARRIER_MASTERY);
@@ -505,6 +554,12 @@ export default function Home() {
       const savedP3 = readMastery(saved.phase3Mastery);
       const savedP4 = readMastery(saved.phase4Mastery);
       const savedP5 = readMastery(saved.phase5Mastery);
+      const savedCurriculumMastery = {
+        1: readCurriculumMastery(saved.level1Curriculum2026Mastery, 1, savedP1),
+        2: readCurriculumMastery(saved.level2Curriculum2026Mastery, 2, savedP2),
+        3: readCurriculumMastery(saved.level3Curriculum2026Mastery, 3),
+      } satisfies Record<CurriculumLevel, CurriculumMastery>;
+      const savedCurriculumExposure = readCurriculumExposure(saved.formationCurriculum2026Exposure);
       const savedHHistory = readHHistory(saved.hModifierHistory);
       const savedCarrierHistory = readCarrierHistory(saved.carrierDigitHistory);
       const savedLocationHistory = readLocationHistory(saved.runLocationHistory);
@@ -515,9 +570,9 @@ export default function Home() {
       const savedPhase4CarrierMastery = readCarrierMastery(saved.phase4CarrierMastery, legacyPhase4Complete);
       const savedPhase5RunLocationMastery = readRunLocationMastery(saved.phase5RunLocationMastery, legacyPhase5Complete);
       const masteryCards: CardState = {
-        phase1: phaseMastered(savedP1),
-        phase2: phaseMastered(savedP2),
-        phase3: phaseMastered(savedP3),
+        phase1: phaseMastered(savedP1) || curriculumLevelMastered(1, savedCurriculumMastery[1]),
+        phase2: phaseMastered(savedP2) || curriculumLevelMastered(2, savedCurriculumMastery[2]),
+        phase3: phaseMastered(savedP3) || curriculumLevelMastered(3, savedCurriculumMastery[3]),
         phase4: phase4Mastered(savedPhase4CarrierMastery),
         phase5: phase5Mastered(savedPhase5RunLocationMastery),
       };
@@ -527,6 +582,8 @@ export default function Home() {
       setP1Mastery(savedP1);
       setP2Mastery(savedP2);
       setP3Mastery(savedP3);
+      setCurriculumMastery(savedCurriculumMastery);
+      setCurriculumExposure(savedCurriculumExposure);
       setP4Mastery(savedP4);
       setP5Mastery(savedP5);
       setPhase4CarrierMastery(savedPhase4CarrierMastery);
@@ -536,18 +593,20 @@ export default function Home() {
       setLocationHistory(savedLocationHistory);
       setUnlockedCards(migratedCards);
       setCardRevealSeen(savedRevealSeen);
-      setPhase2Unlocked(Boolean(saved.phase2Unlocked) || phaseMastered(savedP1));
-      setPhase3Unlocked(Boolean(saved.phase3Unlocked) || phaseMastered(savedP2));
+      setPhase2Unlocked(Boolean(saved.phase2Unlocked) || phaseMastered(savedP1) || curriculumLevelMastered(1, savedCurriculumMastery[1]));
+      setPhase3Unlocked(Boolean(saved.phase3Unlocked) || phaseMastered(savedP2) || curriculumLevelMastered(2, savedCurriculumMastery[2]));
       setPhase4Unlocked(Boolean(saved.phase4Unlocked) || phaseMastered(savedP3));
       setPhase5Unlocked(Boolean(saved.phase5Unlocked) || phase4Mastered(savedPhase4CarrierMastery));
       const firstUnseen = CARD_KEYS.find((key) => migratedCards[key] && !savedRevealSeen[key]);
       if (firstUnseen) setPendingReveal(firstUnseen);
-      const initialFormation = pickWeightedFormation(savedP1);
-      setFormation(initialFormation);
-      setHModifier(pickWeightedModifier(savedHHistory, undefined, 0, initialFormation));
+      setSelectedCurriculumFormation(selectCurriculumFormation(
+        1,
+        savedCurriculumMastery[1],
+        savedCurriculumExposure[1],
+      ));
       setSelectedRunPlay(pickApprovedRunPlay(4, savedPhase4CarrierMastery, savedPhase5RunLocationMastery));
     } catch {
-      setFormation(pickWeightedFormation(EMPTY_MASTERY));
+      setSelectedCurriculumFormation(ACTIVE_2026_FORMATIONS[0]);
     }
     setReady(true);
   }, []);
@@ -555,8 +614,13 @@ export default function Home() {
   useEffect(() => {
     if (!ready) return;
     localStorage.setItem("zyfl-progress", JSON.stringify({
-      version: 7,
-      progressSchemaVersion: 2,
+      version: 8,
+      progressSchemaVersion: 3,
+      formationCurriculumVersion: "2026-fourth-grade",
+      level1Curriculum2026Mastery: curriculumMastery[1],
+      level2Curriculum2026Mastery: curriculumMastery[2],
+      level3Curriculum2026Mastery: curriculumMastery[3],
+      formationCurriculum2026Exposure: curriculumExposure,
       phase1Mastery: p1Mastery,
       phase1Mastered: phaseMastered(p1Mastery),
       phase2Unlocked,
@@ -581,7 +645,7 @@ export default function Home() {
       unlockedCards,
       cardRevealSeen,
     }));
-  }, [p1Mastery, p2Mastery, p3Mastery, p4Mastery, p5Mastery, phase4CarrierMastery, phase5RunLocationMastery, phase2Unlocked, phase3Unlocked, phase4Unlocked, phase5Unlocked, hHistory, carrierHistory, locationHistory, unlockedCards, cardRevealSeen, ready]);
+  }, [p1Mastery, p2Mastery, p3Mastery, p4Mastery, p5Mastery, curriculumMastery, curriculumExposure, phase4CarrierMastery, phase5RunLocationMastery, phase2Unlocked, phase3Unlocked, phase4Unlocked, phase5Unlocked, hHistory, carrierHistory, locationHistory, unlockedCards, cardRevealSeen, ready]);
 
   useEffect(() => {
     if (!celebration) return;
@@ -646,18 +710,48 @@ export default function Home() {
     advanceToNextLevel(pendingLevelAdvance);
   }, [cardRevealSeen, pendingLevelAdvance, pendingReveal, unlockedCards]);
 
-  const activeMastery = phase === 1 ? p1Mastery : phase === 2 ? p2Mastery : p3Mastery;
-  const correctCell = currentPlayer === "H" ? null : FORMATIONS[formation].players[currentPlayer];
-  const correctHSpot = getHSpot(formation, hModifier);
+  const activeCurriculumLevel = phase <= 3 ? phase as CurriculumLevel : null;
+  const activeCurriculumMastery = activeCurriculumLevel ? curriculumMastery[activeCurriculumLevel] : {};
+  const correctCell = currentPlayer === "H"
+    ? null
+    : phase <= 3
+      ? coordinateCell(selectedCurriculumFormation.coordinates[currentPlayer])
+      : FORMATIONS[formation].players[currentPlayer];
+  const correctHSpot = phase === 3
+    ? selectedCurriculumFormation.coordinates.H ?? { c: 10, r: 2 }
+    : getHSpot(formation, hModifier);
+  const occupiedCurriculumCells = new Set(
+    (["Y", "X", "Z"] as const)
+      .map((player) => selectedCurriculumFormation.coordinates[player])
+      .filter((coordinate): coordinate is GridCoordinate => coordinate !== null)
+      .map((coordinate) => `${coordinate.r}-${coordinate.c}`),
+  );
+  const visibleCurriculumHTargets = CURRICULUM_H_TARGETS.filter(
+    (spot) =>
+      (spot.c === correctHSpot.c && spot.r === correctHSpot.r) ||
+      !occupiedCurriculumCells.has(`${spot.r}-${spot.c}`),
+  );
+  const displayedFormationCall = phase <= 3 ? selectedCurriculumFormation.displayCall : formation;
   const ballCarrier = selectedRunPlay.carrier;
   const carrierHistoryDigit = CARRIER_DIGIT_FOR_PLAYER[ballCarrier];
   const locationDigit = selectedRunPlay.runLocationDigit;
   const runNumber = selectedRunPlay.displayedRunNumber;
   const completeCall = selectedRunPlay.displayCall;
+  const curriculumFamily = FORMATION_FAMILY_DEFINITIONS[selectedCurriculumFormation.formation];
+  const curriculumYAlignmentLabel =
+    curriculumFamily.yAlignmentType === "attached-tight-end"
+      ? "an attached tight end"
+      : curriculumFamily.yAlignmentType === "wing"
+        ? "a wing"
+        : curriculumFamily.yLineStatus === "on-line"
+          ? "an on-line slot"
+          : "an off-ball slot";
   const instruction = locationActive
     ? "Where is the runner going?"
     : phase === 1
-    ? "Place the Y player."
+    ? "Place Y in the correct spot for the formation."
+    : phase === 3
+      ? "Place H using the formation tag. 4 means opposite Y. D means the same side as Y."
     : currentPlayer === "Y" ? "Place the Y player."
       : currentPlayer === "X" ? "Correct. Now place X."
         : currentPlayer === "Z" ? "Correct. Now place Z."
@@ -671,14 +765,26 @@ export default function Home() {
     }
     if (!answered) return instruction;
     if (resultCorrect) {
-      return phase === 1 ? "Touchdown! Great alignment." : "Formation complete! Keep building mastery.";
+      return phase === 1
+        ? `Correct! In ${selectedCurriculumFormation.formation}, Y lines up as ${curriculumYAlignmentLabel} to the ${curriculumFamily.ySide}.`
+        : "Formation complete! Keep building mastery.";
     }
     if (currentPlayer === "H") {
       const side = correctHSpot.c > 10 ? "right" : "left";
+      if (phase === 3) {
+        return selectedCurriculumFormation.hModifier === "4"
+          ? `The 4 tag places H opposite Y.`
+          : selectedCurriculumFormation.hModifier === "D"
+            ? `The D tag places H on the same side as Y.`
+            : `Place H in the stored ${selectedCurriculumFormation.displayCall} alignment.`;
+      }
       return `Letters place H on the Y side. Numbers place H away from Y. ${formation} ${hModifier} places H at ${hModifier} on the ${side} side.`;
     }
-    return `The blue ${currentPlayer} shows the correct location. Try a new play when ready.`;
-  }, [answered, correctHSpot.c, currentPlayer, formation, hModifier, instruction, locationAnswered, locationDigit, phase, resultCorrect, selectedRunPlay.concept]);
+    if (phase <= 3 && currentPlayer === "Y") {
+      return `Not quite. In ${selectedCurriculumFormation.formation}, Y is ${curriculumYAlignmentLabel} to the ${curriculumFamily.ySide}.`;
+    }
+    return `Check ${currentPlayer}. The blue marker shows the correct location.`;
+  }, [answered, correctHSpot.c, currentPlayer, curriculumFamily.ySide, curriculumYAlignmentLabel, formation, hModifier, instruction, locationAnswered, locationDigit, phase, resultCorrect, selectedCurriculumFormation, selectedRunPlay.concept]);
 
   function unlockCard(targetPhase: CardPhase) {
     const key = cardKeyForPhase(targetPhase);
@@ -776,45 +882,34 @@ export default function Home() {
   }
 
   function recordMastery(targetPhase: Phase) {
-    if (targetPhase === 1) {
-      setP1Mastery((current) => {
-        const phaseWasMastered = phaseMastered(current);
-        const wasMastered = current[formation] >= 5;
-        const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
-        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered!`);
-        if (!phase2Unlocked && phaseMastered(next)) {
+    if (targetPhase <= 3) {
+      const curriculumLevel = targetPhase as CurriculumLevel;
+      setCurriculumMastery((current) => {
+        const levelMastery = current[curriculumLevel];
+        const levelWasMastered = curriculumLevelMastered(curriculumLevel, levelMastery);
+        const category = getCurriculumMasteryCategory(curriculumLevel, selectedCurriculumFormation);
+        const target = getCurriculumMasteryTarget(curriculumLevel, category);
+        const categoryWasMastered = (levelMastery[category] ?? 0) >= target;
+        const nextLevelMastery = {
+          ...levelMastery,
+          [category]: Math.min(target, (levelMastery[category] ?? 0) + 1),
+        };
+        const levelIsNowMastered = curriculumLevelMastered(curriculumLevel, nextLevelMastery);
+        if (!categoryWasMastered && nextLevelMastery[category] >= target) {
+          setCelebration(`${category} mastered in Level ${curriculumLevel}!`);
+        }
+        if (curriculumLevel === 1 && !phase2Unlocked && levelIsNowMastered) {
           setPhase2Unlocked(true);
           setCelebration("Level 2 unlocked! Now place Y, X, and Z.");
         }
-        if (!phaseWasMastered && phaseMastered(next)) handleLevelMastery(1);
-        return next;
-      });
-    } else if (targetPhase === 2) {
-      setP2Mastery((current) => {
-        const phaseWasMastered = phaseMastered(current);
-        const wasMastered = current[formation] >= 5;
-        const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
-        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Level 2!`);
-        if (!phase3Unlocked && phaseMastered(next)) {
+        if (curriculumLevel === 2 && !phase3Unlocked && levelIsNowMastered) {
           setPhase3Unlocked(true);
-          setCelebration("Level 3 unlocked! Letters follow Y; numbers go away from Y.");
+          setCelebration("Level 3 unlocked! Now place H using the formation tag.");
         }
-        if (!phaseWasMastered && phaseMastered(next)) handleLevelMastery(2);
-        return next;
+        if (!levelWasMastered && levelIsNowMastered) handleLevelMastery(curriculumLevel);
+        return { ...current, [curriculumLevel]: nextLevelMastery };
       });
-    } else if (targetPhase === 3) {
-      setP3Mastery((current) => {
-        const phaseWasMastered = phaseMastered(current);
-        const wasMastered = current[formation] >= 5;
-        const next = { ...current, [formation]: Math.min(5, current[formation] + 1) };
-        if (!wasMastered && next[formation] === 5) setCelebration(`${formation} mastered in Level 3!`);
-        if (!phase4Unlocked && phaseMastered(next)) {
-          setPhase4Unlocked(true);
-          setCelebration("Level 4 unlocked! The first run-number digit names the ball carrier.");
-        }
-        if (!phaseWasMastered && phaseMastered(next)) handleLevelMastery(3);
-        return next;
-      });
+    } else if (targetPhase === 4) {
     } else if (targetPhase === 4) {
       setPhase4CarrierMastery((current) => {
         const phaseWasMastered = phase4Mastered(current);
@@ -899,6 +994,16 @@ export default function Home() {
     }
   }
 
+  function chooseCurriculumHSpot(coordinate: GridCoordinate) {
+    if (answered || phase !== 3 || currentPlayer !== "H") return;
+    const expected = selectedCurriculumFormation.coordinates.H;
+    const correct = Boolean(expected && expected.c === coordinate.c && expected.r === coordinate.r);
+    setCurriculumHPlacement(coordinate);
+    setResultCorrect(correct);
+    setAnswered(true);
+    if (correct) recordMastery(3);
+  }
+
   function chooseBallCarrier(choice: BallCarrier) {
     if (!quizOpen || quizAnswered) return;
     const correct = choice === ballCarrier;
@@ -965,7 +1070,7 @@ export default function Home() {
   }
 
   function resetPlay(nextPhase = phase) {
-    const mastery = nextPhase === 1 ? p1Mastery : nextPhase === 2 ? p2Mastery : nextPhase === 3 ? p3Mastery : nextPhase === 4 ? p4Mastery : p5Mastery;
+    let nextCurriculumFormation = selectedCurriculumFormation;
     if (nextPhase === 4 || nextPhase === 5) {
       const nextPlay = pickApprovedRunPlay(
         nextPhase,
@@ -982,16 +1087,30 @@ export default function Home() {
       setFormation(nextPlay.formation);
       setHModifier(nextPlay.hModifier);
     } else {
-      const nextFormation = pickWeightedFormation(mastery, formation, repeatCount);
-      const nextModifier = pickWeightedModifier(hHistory, hModifier, hRepeatCount, nextFormation, nextPhase);
-      setRepeatCount(nextFormation === formation ? repeatCount + 1 : 1);
-      setHRepeatCount(nextModifier === hModifier ? hRepeatCount + 1 : 1);
-      setFormation(nextFormation);
-      setHModifier(nextModifier);
+      const curriculumLevel = nextPhase as CurriculumLevel;
+      nextCurriculumFormation = selectCurriculumFormation(
+        curriculumLevel,
+        curriculumMastery[curriculumLevel],
+        curriculumExposure[curriculumLevel],
+        selectedCurriculumFormation.id,
+      );
+      setSelectedCurriculumFormation(nextCurriculumFormation);
+      setCurriculumExposure((current) => ({
+        ...current,
+        [curriculumLevel]: {
+          ...current[curriculumLevel],
+          [nextCurriculumFormation.id]: (current[curriculumLevel][nextCurriculumFormation.id] ?? 0) + 1,
+        },
+      }));
     }
-    setCurrentPlayer("Y");
-    setPlacements({});
+    setCurrentPlayer(nextPhase === 3 ? "H" : "Y");
+    setPlacements(nextPhase === 3 ? {
+      Y: coordinateCell(nextCurriculumFormation.coordinates.Y) as Cell,
+      X: coordinateCell(nextCurriculumFormation.coordinates.X) as Cell,
+      Z: coordinateCell(nextCurriculumFormation.coordinates.Z) as Cell,
+    } : {});
     setHPlacement(null);
+    setCurriculumHPlacement(null);
     setSelected(null);
     setAnswered(false);
     setResultCorrect(null);
@@ -1172,7 +1291,7 @@ export default function Home() {
           <div className="play-heading">
             <div className="play-call">
               <p className="eyebrow">Coach&apos;s call · Level {phase}</p>
-              <h1 className={phase >= 4 ? "approved-play-call" : undefined}>{phase >= 4 ? completeCall : `${formation}${phase === 3 ? ` ${hModifier}` : ""}!`}</h1>
+              <h1 className="approved-play-call">{phase >= 4 ? completeCall : selectedCurriculumFormation.displayCall}</h1>
             </div>
             <div className={`feedback ${answered ? "visible" : ""} ${answered && resultCorrect ? "success" : "try-again"}`} aria-live="polite">
               <span className="feedback-icon">{answered ? (resultCorrect ? "✓" : "!") : locationActive ? "?" : currentPlayer}</span>
@@ -1218,9 +1337,9 @@ export default function Home() {
                 );
               })}
             </div>
-            <div className="formation-board" aria-label={`Formation board for ${formation}`}>
+            <div className="formation-board" aria-label={`Formation board for ${displayedFormationCall}`}>
               <div className="line-of-scrimmage" />
-              {SELECTABLE.map((cell) => {
+              {(phase <= 3 ? CURRICULUM_SELECTABLE : SELECTABLE).map((cell) => {
                 const [row, col] = cell.split("-").map(Number);
                 const marker = markerAt(cell);
                 const selectedHere = selected === cell;
@@ -1240,7 +1359,31 @@ export default function Home() {
                   </button>
                 );
               })}
-              {phase >= 3 && hTargetsForFormation(formation).map((spot) => {
+              {phase === 3 && visibleCurriculumHTargets.map((spot) => {
+                const selectedHere = curriculumHPlacement?.c === spot.c && curriculumHPlacement?.r === spot.r;
+                const expected = selectedCurriculumFormation.coordinates.H;
+                const correctHere = answered && resultCorrect === false && expected?.c === spot.c && expected?.r === spot.r;
+                const showMarker = selectedHere || correctHere;
+                return (
+                  <button
+                    key={`curriculum-h-${spot.r}-${spot.c}`}
+                    className={`h-target ${selectedHere && resultCorrect === false ? "selected" : ""} ${correctHere ? "correct-target" : ""}`}
+                    style={{
+                      left: `calc((${spot.c} - 0.5) * (100% / 19))`,
+                      top: `calc((${spot.r} - 0.5) * (100% / 6))`,
+                    }}
+                    onClick={() => chooseCurriculumHSpot(spot)}
+                    disabled={answered || currentPlayer !== "H"}
+                    data-active={currentPlayer === "H"}
+                    aria-label={`Place H at row ${spot.r}, column ${spot.c}`}
+                  >
+                    {showMarker && <span className={`player skill-player player-h ${correctHere ? "revealed-player" : ""}`}>
+                      H
+                    </span>}
+                  </button>
+                );
+              })}
+              {phase >= 4 && hTargetsForFormation(formation).map((spot) => {
                 const selectedHere = hPlacement === spot.modifier;
                 const correctHere = answered && resultCorrect === false && spot.modifier === hModifier;
                 const showMarker = selectedHere || correctHere;
@@ -1320,7 +1463,7 @@ export default function Home() {
           </div>
 
           {phase <= 3
-            ? <MasteryTracker phase={phase} mastery={activeMastery} />
+            ? <CurriculumMasteryTracker phase={phase as CurriculumLevel} mastery={activeCurriculumMastery} />
             : phase === 4
               ? <CarrierMasteryTracker mastery={phase4CarrierMastery} />
               : <RunLocationMasteryTracker mastery={phase5RunLocationMastery} />}
@@ -1370,22 +1513,22 @@ export default function Home() {
           <div className="section-title"><p className="eyebrow">Quick guide</p><h1>How to Play</h1><p>Master each training level to unlock a collectible football card. Build your collection from Rookie through Mythic.</p></div>
           <div className="steps">
             {[
-              ["1", "Master Y", "Place Y correctly five times in every formation."],
-              ["2", "Build the formation", "Place Y, then X, then Z in all six formations."],
-              ["3", "Add H", "Letters follow Y. Numbers send H away from Y."],
+              ["1", "Master Y", "Place Y in the correct spot for the formation."],
+              ["2", "Build the formation", "Build the formation by placing Y, X, and Z."],
+              ["3", "Add H", "Place H using the formation tag. 4 means opposite Y. D means the same side as Y."],
               ["4", "Name the carrier", "The first run-number digit tells who carries the ball."],
               ["5", "Find the run location", "Click the landmark shown by the second run-number digit."],
             ].map(([number, title, copy]) => <article key={number}><span>{number}</span><h2>{title}</h2><p>{copy}</p></article>)}
           </div>
           <div className="reference">
-            <h2>Y Formation Reference</h2>
+            <h2>2026 Formation Reference</h2>
             <div className="reference-grid">
-              {FORMATION_NAMES.map((name) => (
-                <div key={name}><b>{name}</b><span>{FORMATIONS[name].short}</span></div>
+              {ACTIVE_CURRICULUM_FAMILIES.map((name) => (
+                <div key={name}><b>{name}</b><span>{curriculumFamilyShortLabel(name)}</span></div>
               ))}
             </div>
             <p className="memory-tip"><b>Memory tip:</b> Right-side formations start with R. Left-side formations start with L.</p>
-            <p className="memory-tip h-rule"><b>H-back rule:</b> A, B, C, and D place H on the same side as Y. 1, 2, 3, and 4 place H away from Y.</p>
+            <p className="memory-tip h-rule"><b>H-back rule:</b> 4 places H opposite Y. D places H on the same side as Y.</p>
             <p className="memory-tip carrier-rule"><b>Ball-carrier rule:</b> 1 = QB, 2 = F, 4 = H, 5 = Y, 6 = X, and 7 = Z.</p>
             <div className="rarity-guide" aria-label="Football card rarity levels">
               {CARD_KEYS.map((key) => <span key={key} className={`rarity-${CARD_DATA[key].rarity.toLowerCase()}`}>{CARD_DATA[key].rarity}</span>)}
@@ -1458,20 +1601,26 @@ export default function Home() {
   );
 }
 
-function MasteryTracker({ phase, mastery }: { phase: Phase; mastery: Mastery }) {
+function CurriculumMasteryTracker({ phase, mastery }: { phase: CurriculumLevel; mastery: CurriculumMastery }) {
+  const categories = getCurriculumMasteryCategories(phase);
+  const masteredCount = categories.filter(
+    (category) => (mastery[category] ?? 0) >= getCurriculumMasteryTarget(phase, category),
+  ).length;
   return (
     <section className="mastery-panel" aria-label={`Level ${phase} mastery`}>
       <div className="mastery-heading">
-        <div><p className="eyebrow">Level {phase} progress</p><h2>Formation Mastery</h2></div>
-        <span>{FORMATION_NAMES.filter((name) => mastery[name] >= 5).length}/6 mastered</span>
+        <div><p className="eyebrow">Level {phase} progress</p><h2>{phase === 3 ? "H Alignment Mastery" : "Formation Mastery"}</h2></div>
+        <span>{masteredCount}/{categories.length} mastered</span>
       </div>
       <div className="mastery-grid">
-        {FORMATION_NAMES.map((name) => {
-          const complete = mastery[name] >= 5;
+        {categories.map((category) => {
+          const target = getCurriculumMasteryTarget(phase, category);
+          const score = mastery[category] ?? 0;
+          const complete = score >= target;
           return (
-            <div key={name} className={`mastery-item ${complete ? "mastered" : ""}`}>
-              <div><b>{complete ? "✓ " : ""}{name}</b><span>{complete ? "Mastered" : `${mastery[name]}/5`}</span></div>
-              <i><span style={{ width: `${mastery[name] * 20}%` }} /></i>
+            <div key={category} className={`mastery-item ${complete ? "mastered" : ""}`}>
+              <div><b>{complete ? "✓ " : ""}{category}</b><span>{complete ? "Mastered" : `${score}/${target}`}</span></div>
+              <i><span style={{ width: `${target ? (score / target) * 100 : 0}%` }} /></i>
             </div>
           );
         })}
