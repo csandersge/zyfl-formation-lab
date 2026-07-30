@@ -211,14 +211,23 @@ const LEVEL_CONFIG: Array<{
   level: Phase;
   title: string;
   reward: string;
+  enabled: boolean;
   lockedMessage?: string;
 }> = [
-  { level: 1, title: "Place Y", reward: "Reward: Rookie Football Card" },
-  { level: 2, title: "Place Y, X & Z", reward: "Reward: Pro Football Card", lockedMessage: "Master all six formations to unlock" },
-  { level: 3, title: "Add the H back", reward: "Reward: Elite Football Card", lockedMessage: "Master Level 2 to unlock H-back training" },
-  { level: 4, title: "Identify the Ball Carrier", reward: "Reward: Legendary Football Card", lockedMessage: "Master all six formations in Level 3 to unlock ball-carrier training" },
-  { level: 5, title: "Identify the Run Location", reward: "Reward: Lane Finder", lockedMessage: "Master every active ball carrier in Level 4 to unlock run-location training" },
+  { level: 1, title: "Place Y", reward: "Reward: Rookie Football Card", enabled: true },
+  { level: 2, title: "Place Y, X & Z", reward: "Reward: Pro Football Card", enabled: true, lockedMessage: "Master all six formations to unlock" },
+  { level: 3, title: "Add the H back", reward: "Reward: Elite Football Card", enabled: true, lockedMessage: "Master Level 2 to unlock H-back training" },
+  { level: 4, title: "Identify the Ball Carrier", reward: "Reward: Legendary Football Card", enabled: false, lockedMessage: "Master all six formations in Level 3 to unlock ball-carrier training" },
+  { level: 5, title: "Identify the Run Location", reward: "Reward: Lane Finder", enabled: false, lockedMessage: "Master every active ball carrier in Level 4 to unlock run-location training" },
 ];
+
+function levelIsAvailable(level: Phase) {
+  return LEVEL_CONFIG.find((item) => item.level === level)?.enabled ?? false;
+}
+
+function nextAvailableLevel(currentLevel: Phase): Phase | null {
+  return LEVEL_CONFIG.find((item) => item.level > currentLevel && item.enabled)?.level ?? null;
+}
 
 function clampMastery(value: unknown): number {
   return typeof value === "number" ? Math.max(0, Math.min(5, Math.floor(value))) : 0;
@@ -737,24 +746,23 @@ export default function Home() {
   }
 
   function advanceToNextLevel(currentLevel: Phase) {
-    const nextLevel = currentLevel + 1;
+    const nextLevel = nextAvailableLevel(currentLevel);
     setPendingLevelAdvance(null);
     setTab("play");
 
-    if (nextLevel <= 5) {
-      const targetLevel = nextLevel as Phase;
-      unlockLevel(targetLevel);
-      setPhase(targetLevel);
-      resetPlay(targetLevel);
-      setCelebration(`Level ${targetLevel} ready!`);
+    if (nextLevel) {
+      unlockLevel(nextLevel);
+      setPhase(nextLevel);
+      resetPlay(nextLevel);
+      setCelebration(`Level ${nextLevel} ready!`);
       window.setTimeout(() => {
-        const target = levelSelectorRef.current?.querySelector<HTMLButtonElement>(`button[data-level="${targetLevel}"]`);
+        const target = levelSelectorRef.current?.querySelector<HTMLButtonElement>(`button[data-level="${nextLevel}"]`);
         target?.focus({ preventScroll: true });
       }, 0);
     } else {
-      setCelebration("All levels mastered!");
+      setCelebration(currentLevel < 5 ? "More levels are being updated!" : "All levels mastered!");
       window.setTimeout(() => {
-        const target = levelSelectorRef.current?.querySelector<HTMLButtonElement>('button[data-level="5"]');
+        const target = levelSelectorRef.current?.querySelector<HTMLButtonElement>(`button[data-level="${currentLevel}"]`);
         target?.focus({ preventScroll: true });
       }, 0);
     }
@@ -997,6 +1005,7 @@ export default function Home() {
   }
 
   function choosePhase(nextPhase: Phase) {
+    if (!levelIsAvailable(nextPhase)) return;
     if (nextPhase === 2 && !phase2Unlocked) return;
     if (nextPhase === 3 && !phase3Unlocked) return;
     if (nextPhase === 4 && !phase4Unlocked) return;
@@ -1122,24 +1131,28 @@ export default function Home() {
             </button>
             <div ref={levelScrollViewportRef} className="level-scroll-viewport">
               <div className="level-scroll-track">
-                {LEVEL_CONFIG.map(({ level, title, reward, lockedMessage }) => {
+                {LEVEL_CONFIG.map(({ level, title, reward, enabled, lockedMessage }) => {
                   const unlocked = levelIsUnlocked(level);
                   const cardKey = cardKeyForPhase(level);
                   const completed = unlockedCards[cardKey];
+                  const unavailable = !enabled;
                   return (
                     <button
                       key={level}
                       type="button"
                       data-level={level}
-                      className={`level-card ${phase === level ? "phase-active" : ""}`}
+                      className={`level-card ${phase === level ? "phase-active" : ""} ${unavailable ? "level-updating" : ""}`}
                       aria-current={phase === level ? "step" : undefined}
+                      aria-label={unavailable ? `Level ${level}: ${title}. Updating Playbook.` : undefined}
                       onClick={() => choosePhase(level)}
-                      disabled={!unlocked}
+                      disabled={unavailable || !unlocked}
                     >
-                      <span>Level {level} {completed ? "✓" : unlocked ? "" : "🔒"}</span>
+                      <span>Level {level} {unavailable ? "" : completed ? "✓" : unlocked ? "" : "🔒"}</span>
                       <b>{title}</b>
-                      {!unlocked && lockedMessage && <small>{lockedMessage}</small>}
-                      <small className="phase-reward">{completed ? "Card Unlocked ✓" : reward}</small>
+                      {unavailable
+                        ? <small className="level-updating-label">Updating Playbook</small>
+                        : !unlocked && lockedMessage && <small>{lockedMessage}</small>}
+                      {!unavailable && <small className="phase-reward">{completed ? "Card Unlocked ✓" : reward}</small>}
                     </button>
                   );
                 })}
@@ -1403,7 +1416,9 @@ export default function Home() {
                 <p>{CARD_DATA[pendingReveal].rarity} · {CARD_DATA[pendingReveal].title}</p>
                 {pendingLevelAdvance ? (
                   <button className="primary-button" onClick={() => finishReveal(false)}>
-                    {pendingLevelAdvance < 5 ? `Continue to Level ${pendingLevelAdvance + 1}` : "Return to Levels"}
+                    {nextAvailableLevel(pendingLevelAdvance)
+                      ? `Continue to Level ${nextAvailableLevel(pendingLevelAdvance)}`
+                      : "Return to Levels"}
                   </button>
                 ) : (
                   <>

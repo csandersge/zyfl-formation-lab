@@ -23,7 +23,8 @@ test("server-renders the ZYFL Formation Lab", async () => {
   assert.match(html, /<title>ZYFL Formation Lab<\/title>/i);
   assert.match(html, /Level 4/);
   assert.match(html, /Identify the Ball Carrier/);
-  assert.match(html, /Master all six formations in Level 3/);
+  assert.match(html, /Level 4: Identify the Ball Carrier\. Updating Playbook\./);
+  assert.match(html, /Level 5: Identify the Run Location\. Updating Playbook\./);
   assert.doesNotMatch(html, />[^<]*\bPhases?\b[^<]*</i);
   assert.match(html, /Formation Mastery/);
 });
@@ -93,7 +94,14 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(page, /if \(!phaseWasMastered && phase4Mastered\(next\)\) handleLevelMastery\(4\)/);
   assert.match(page, /const LEVEL_CONFIG: Array/);
   assert.equal((page.match(/\{ level: [1-5], title:/g) ?? []).length, 5);
-  assert.match(page, /LEVEL_CONFIG\.map\(\(\{ level, title, reward, lockedMessage \}\)/);
+  assert.match(page, /\{ level: 4, title: "Identify the Ball Carrier".*enabled: false/);
+  assert.match(page, /\{ level: 5, title: "Identify the Run Location".*enabled: false/);
+  assert.match(page, /function levelIsAvailable\(level: Phase\)/);
+  assert.match(page, /function nextAvailableLevel\(currentLevel: Phase\)/);
+  assert.match(page, /if \(!levelIsAvailable\(nextPhase\)\) return/);
+  assert.match(page, /disabled=\{unavailable \|\| !unlocked\}/);
+  assert.match(page, /LEVEL_CONFIG\.map\(\(\{ level, title, reward, enabled, lockedMessage \}\)/);
+  assert.match(page, /Updating Playbook/);
   assert.match(page, /data-level=\{level\}/);
   assert.match(page, /aria-current=\{phase === level \? "step" : undefined\}/);
   assert.match(page, /aria-label="Previous levels"/);
@@ -111,6 +119,7 @@ test("includes Level 4 carrier rules, quiz, and compatible storage", async () =>
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*?\.level-scroll-button \{ display: none; \}/);
   assert.doesNotMatch(css, /\.phase-selector/);
   assert.match(page, /Continue to Level/);
+  assert.match(page, /nextAvailableLevel\(pendingLevelAdvance\)/);
   assert.match(page, /Return to Levels/);
   assert.match(page, /finishReveal\(false\)/);
   assert.match(page, /\{ level: 5, title: "Identify the Run Location", reward: "Reward: Lane Finder"/);
