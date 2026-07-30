@@ -18,6 +18,20 @@ export type FormationSide = "left" | "right";
 export type YAlignmentType = "attached-tight-end" | "wing" | "slot" | "unknown";
 export type LineStatus = "on-line" | "off-line" | "play-dependent" | "unknown";
 export type HRelationToY = "same-side" | "opposite-side";
+export type GridCoordinate = { c: number; r: number };
+export type FormationCoordinates = {
+  Y: GridCoordinate | null;
+  X: GridCoordinate | null;
+  Z: GridCoordinate | null;
+  H: GridCoordinate | null;
+};
+export type CoordinateSource = "reused-existing" | "playbook-diagram" | "semantic-rule" | "unresolved";
+export type GridCompatibility = "compatible" | "compatible-with-new-coordinates" | "requires-adjustment" | "unresolved";
+export type CoordinateWarning = {
+  players: ["Y" | "X" | "Z" | "H", "Y" | "X" | "Z" | "H"];
+  reason: string;
+  severity: "blocking";
+};
 
 export type FormationFamilyDefinition = {
   formation: FormationCurriculumFamily;
@@ -56,7 +70,11 @@ export type FormationCurriculumEntry = {
     type: "slot";
     lineStatus: "off-line" | "unknown";
   } | null;
-  coordinates: null;
+  coordinates: FormationCoordinates;
+  coordinateSources: Record<keyof FormationCoordinates, CoordinateSource>;
+  coordinateWarnings: readonly CoordinateWarning[];
+  gridCompatibility: GridCompatibility;
+  compatibilityNotes?: string;
   alignmentVariation?: string;
   otherPlayerAlignmentNote?: string;
   sourceConflict?: string;
@@ -189,6 +207,77 @@ export const H_ALIGNMENT_DEFINITIONS: Readonly<
   },
 };
 
+type DraftFamilyCoordinates = Pick<FormationCoordinates, "Y" | "X" | "Z">;
+
+// Draft 19×6 coordinates. Existing live coordinates are not changed or imported here.
+const DRAFT_FAMILY_COORDINATES: Readonly<Record<FormationCurriculumFamily, DraftFamilyCoordinates>> = {
+  Right: { Y: { c: 13, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 2 } },
+  Left: { Y: { c: 7, r: 1 }, X: { c: 2, r: 2 }, Z: { c: 18, r: 1 } },
+  Rip: { Y: { c: 13, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+  Liz: { Y: { c: 7, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+  Rock: { Y: { c: 16, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+  Lex: { Y: { c: 4, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+  Rap: { Y: { c: 16, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+  Lap: { Y: { c: 4, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+  Ray: { Y: { c: 13, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 4, r: 2 } },
+  Larry: { Y: { c: 7, r: 1 }, X: { c: 18, r: 1 }, Z: { c: 16, r: 2 } },
+  Ricky: { Y: { c: 13, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+  Lucky: { Y: { c: 7, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+};
+
+const LEGACY_FAMILIES = new Set<FormationCurriculumFamily>(["Right", "Left", "Rip", "Liz", "Rock", "Lex"]);
+
+const LEGACY_H_COORDINATES = {
+  right: { "4": { c: 4, r: 2 }, D: { c: 16, r: 2 } },
+  left: { "4": { c: 16, r: 2 }, D: { c: 4, r: 2 } },
+} as const;
+
+const CANDIDATE_2026_H_COORDINATES = {
+  right: { "4": { c: 5, r: 2 }, D: { c: 16, r: 2 } },
+  left: { "4": { c: 15, r: 2 }, D: { c: 4, r: 2 } },
+} as const;
+
+export const H_COORDINATE_COMPATIBILITY_REPORT = (["right", "left"] as const).flatMap((ySide) =>
+  (["4", "D"] as const).map((modifier) => ({
+    ySide,
+    modifier,
+    oldCoordinate: LEGACY_H_COORDINATES[ySide][modifier],
+    newCandidateCoordinate: CANDIDATE_2026_H_COORDINATES[ySide][modifier],
+    matches2026Definition:
+      LEGACY_H_COORDINATES[ySide][modifier].c === CANDIDATE_2026_H_COORDINATES[ySide][modifier].c
+      && LEGACY_H_COORDINATES[ySide][modifier].r === CANDIDATE_2026_H_COORDINATES[ySide][modifier].r,
+  })),
+);
+
+export function getCoordinateDistance(a: GridCoordinate, b: GridCoordinate) {
+  return {
+    columnDistance: Math.abs(a.c - b.c),
+    rowDistance: Math.abs(a.r - b.r),
+  };
+}
+
+export function findCoordinateWarnings(coordinates: FormationCoordinates): CoordinateWarning[] {
+  const players = Object.entries(coordinates).filter(
+    (entry): entry is [keyof FormationCoordinates, GridCoordinate] => entry[1] !== null,
+  );
+  const warnings: CoordinateWarning[] = [];
+  for (let first = 0; first < players.length; first += 1) {
+    for (let second = first + 1; second < players.length; second += 1) {
+      const [firstPlayer, firstCoordinate] = players[first];
+      const [secondPlayer, secondCoordinate] = players[second];
+      const distance = getCoordinateDistance(firstCoordinate, secondCoordinate);
+      if (distance.rowDistance === 0 && distance.columnDistance < 1) {
+        warnings.push({
+          players: [firstPlayer, secondPlayer],
+          reason: "Rendered markers overlap",
+          severity: "blocking",
+        });
+      }
+    }
+  }
+  return warnings;
+}
+
 const RAY_LARRY_SOURCE_CONFLICT =
   "Progression table lists Ray/Larry without a modifier; diagram labels may show 4. Retained progression-table wording pending implementation review.";
 
@@ -202,6 +291,51 @@ type CurriculumEntrySource = Pick<
 function createCurriculumEntry(source: CurriculumEntrySource): FormationCurriculumEntry {
   const family = FORMATION_FAMILY_DEFINITIONS[source.formation];
   const hDefinition = source.hModifier === null ? null : H_ALIGNMENT_DEFINITIONS[source.hModifier];
+  const familyCoordinates = DRAFT_FAMILY_COORDINATES[source.formation];
+  const diagramHasUnresolvedD =
+    (source.formation === "Ricky" || source.formation === "Lucky") && source.hModifier === "D";
+  const diagramOnlyH = source.formation === "Ray"
+    ? { c: 5, r: 2 }
+    : source.formation === "Larry"
+      ? { c: 15, r: 2 }
+      : null;
+  const hCoordinate = diagramHasUnresolvedD
+    ? null
+    : source.hModifier === null
+      ? diagramOnlyH
+      : CANDIDATE_2026_H_COORDINATES[family.ySide][source.hModifier];
+  const coordinates: FormationCoordinates = { ...familyCoordinates, H: hCoordinate };
+  const reusedFamily = LEGACY_FAMILIES.has(source.formation);
+  const coordinateSources: Record<keyof FormationCoordinates, CoordinateSource> = {
+    Y: reusedFamily ? "reused-existing" : "playbook-diagram",
+    X: reusedFamily ? "reused-existing" : "playbook-diagram",
+    Z: reusedFamily ? "reused-existing" : "playbook-diagram",
+    H: diagramHasUnresolvedD
+      ? "unresolved"
+      : source.hModifier === null
+        ? "playbook-diagram"
+        : "semantic-rule",
+  };
+  const coordinateWarnings = findCoordinateWarnings(coordinates);
+  const sourceHasModifierConflict = source.formation === "Ray" || source.formation === "Larry";
+  const gridCompatibility: GridCompatibility = diagramHasUnresolvedD || sourceHasModifierConflict
+    ? "unresolved"
+    : coordinateWarnings.length
+      ? "requires-adjustment"
+      : reusedFamily && source.hModifier !== "4"
+        ? "compatible"
+        : "compatible-with-new-coordinates";
+  const compatibilityNotes = diagramHasUnresolvedD
+    ? "The diagram places H opposite Y even though the written D rule says same-side; H remains unresolved."
+    : sourceHasModifierConflict
+      ? "The diagram supplies draft personnel coordinates but labels the call with 4 while the progression table omits the modifier."
+      : coordinateWarnings.length
+        ? "The current marker geometry produces a blocking player overlap."
+        : source.hModifier === "4"
+          ? "The 2026 H midpoint is one column inward from the legacy 4 target."
+          : source.formation === "Rap" || source.formation === "Lap"
+            ? "Row 1 preserves the on-line slot distinction from the off-line Rock/Lex row 2 alignment."
+            : undefined;
   return {
     ...source,
     cumulativeForFourthGrade: true,
@@ -218,10 +352,14 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
           lineStatus: hDefinition.lineStatus,
         }
       : null,
-    coordinates: null,
+    coordinates,
+    coordinateSources,
+    coordinateWarnings,
+    gridCompatibility,
+    ...(compatibilityNotes ? { compatibilityNotes } : {}),
     ...(family.alignmentVariation ? { alignmentVariation: family.alignmentVariation } : {}),
     ...(family.otherPlayerAlignmentNote ? { otherPlayerAlignmentNote: family.otherPlayerAlignmentNote } : {}),
-    needsReview: family.needsReview,
+    needsReview: family.needsReview || gridCompatibility === "requires-adjustment" || gridCompatibility === "unresolved",
   };
 }
 
@@ -257,6 +395,18 @@ export const APPROVED_2026_FOURTH_GRADE_FORMATIONS: readonly FormationCurriculum
   createCurriculumEntry({ id: "lucky-d", displayCall: "Lucky D", formation: "Lucky", hModifier: "D", introducedAt: "4th Grade" }),
 ];
 
+export const FORMATION_GRID_COMPATIBILITY_REPORT = {
+  grid: { columns: 19, rows: 6 },
+  markerDiameter: "clamp(31px, 4vw, 48px)",
+  entries: APPROVED_2026_FOURTH_GRADE_FORMATIONS.map((entry) => ({
+    id: entry.id,
+    displayCall: entry.displayCall,
+    gridCompatibility: entry.gridCompatibility,
+    compatibilityNotes: entry.compatibilityNotes,
+    coordinateWarnings: entry.coordinateWarnings,
+  })),
+};
+
 const VALID_FORMATION_FAMILIES: ReadonlySet<FormationCurriculumFamily> = new Set(
   Object.keys(FORMATION_FAMILY_DEFINITIONS) as FormationCurriculumFamily[],
 );
@@ -274,6 +424,11 @@ export function validateApproved2026FourthGradeFormations(
     throw new Error("Ray and Larry must not have H modifiers.");
   }
   if (entries.some((entry) => entry.active)) throw new Error("The 2026 formation curriculum must remain inactive.");
-  if (entries.some((entry) => entry.coordinates !== null)) throw new Error("Formation coordinates must remain unresolved in this data-only step.");
+  if (entries.some((entry) => Object.values(entry.coordinates).some((coordinate) =>
+    coordinate !== null && (coordinate.c < 1 || coordinate.c > 19 || coordinate.r < 1 || coordinate.r > 6)
+  ))) throw new Error("Formation curriculum contains coordinates outside the 19×6 grid.");
+  if (entries.some((entry) => entry.gridCompatibility === "compatible" && entry.coordinateWarnings.length)) {
+    throw new Error("A compatible formation cannot contain blocking coordinate warnings.");
+  }
   return true;
 }
