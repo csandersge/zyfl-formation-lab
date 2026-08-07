@@ -1178,6 +1178,11 @@ export default function Home() {
     return phase >= 4 && quizAnswered && label === ballCarrier ? "ball-carrier" : "";
   }
 
+  function lineStatusClass(label: PlayerLabel) {
+    const lineStatus = activeFormationEntry.playerAlignments[label]?.lineStatus;
+    return lineStatus ? `line-status-${lineStatus}` : "";
+  }
+
   function footballBadge(label: string) {
     return phase >= 4 && quizAnswered && label === ballCarrier
       ? <span className="football-badge" aria-label="Ball carrier">🏈</span>
@@ -1384,7 +1389,10 @@ export default function Home() {
                     disabled={phase >= 4 || answered || quizOpen || currentPlayer === "H"}
                     aria-label={`Place ${currentPlayer} at row ${row}, column ${col}`}
                   >
-                    {marker && <span className={`player skill-player player-${marker.label.toLowerCase()} ${marker.reveal ? "revealed-player" : ""} ${carrierClass(marker.label)}`}>
+                    {marker && <span
+                      className={`player skill-player player-${marker.label.toLowerCase()} ${lineStatusClass(marker.label)} ${marker.reveal ? "revealed-player" : ""} ${carrierClass(marker.label)}`}
+                      data-line-status={activeFormationEntry.playerAlignments[marker.label]?.lineStatus}
+                    >
                       {marker.label}{footballBadge(marker.label)}
                     </span>}
                   </button>
@@ -1408,7 +1416,10 @@ export default function Home() {
                     data-active={currentPlayer === "H"}
                     aria-label={`Place H at row ${spot.r}, column ${spot.c}`}
                   >
-                    {showMarker && <span className={`player skill-player player-h ${correctHere ? "revealed-player" : ""}`}>
+                    {showMarker && <span
+                      className={`player skill-player player-h ${lineStatusClass("H")} ${correctHere ? "revealed-player" : ""}`}
+                      data-line-status={activeFormationEntry.playerAlignments.H?.lineStatus}
+                    >
                       H
                     </span>}
                   </button>
@@ -1416,7 +1427,8 @@ export default function Home() {
               })}
               {phase >= 4 && curriculumHPlacement && (
                 <span
-                  className="player skill-player player-h"
+                  className={`player skill-player player-h ${lineStatusClass("H")}`}
+                  data-line-status={activeFormationEntry.playerAlignments.H?.lineStatus}
                   style={{ gridRow: curriculumHPlacement.r, gridColumn: curriculumHPlacement.c }}
                 >
                   H

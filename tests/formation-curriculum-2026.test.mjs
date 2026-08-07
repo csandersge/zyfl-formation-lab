@@ -39,10 +39,10 @@ test("the 2026 fourth-grade curriculum activates only complete compatible calls"
       "Ray 4", "Larry 4", "Ricky 4", "Ricky D", "Lucky 4", "Lucky D",
     ],
   );
-  assert.equal(ACTIVE_2026_FORMATIONS.length, 18);
+  assert.equal(ACTIVE_2026_FORMATIONS.length, 20);
   assert.deepEqual(
     EXCLUDED_2026_FORMATIONS.map(({ displayCall }) => displayCall),
-    ["Rock D", "Lex D", "Ricky D", "Lucky D"],
+    ["Rock D", "Lex D"],
   );
   assert.ok(ACTIVE_2026_FORMATIONS.every(({ active }) => active));
   assert.ok(ACTIVE_2026_FORMATIONS.every(({ coordinates }) =>
@@ -64,8 +64,8 @@ test("the 2026 fourth-grade curriculum activates only complete compatible calls"
   assert.equal(H_ALIGNMENT_DEFINITIONS.D.relationToY, "same-side");
   assert.equal(FORMATION_FAMILY_DEFINITIONS.Rap.yLineStatus, "on-line");
   assert.equal(FORMATION_FAMILY_DEFINITIONS.Rock.yLineStatus, "off-line");
-  assert.equal(FORMATION_FAMILY_DEFINITIONS.Ricky.yAlignmentType, "unknown");
-  assert.equal(FORMATION_FAMILY_DEFINITIONS.Lucky.needsReview, true);
+  assert.equal(FORMATION_FAMILY_DEFINITIONS.Ricky.yAlignmentType, "wing");
+  assert.equal(FORMATION_FAMILY_DEFINITIONS.Lucky.needsReview, false);
   assert.deepEqual(
     H_COORDINATE_COMPATIBILITY_REPORT
       .filter(({ modifier }) => modifier === "4")
@@ -84,12 +84,6 @@ test("the 2026 fourth-grade curriculum activates only complete compatible calls"
     assert.equal(entry?.gridCompatibility, "requires-adjustment");
     assert.ok(entry?.coordinateWarnings.some(({ players }) => players.includes("Y") && players.includes("H")));
   }
-  for (const call of ["Ricky D", "Lucky D"]) {
-    const entry = APPROVED_2026_FOURTH_GRADE_FORMATIONS.find(({ displayCall }) => displayCall === call);
-    assert.equal(entry?.coordinates.H, null);
-    assert.equal(entry?.coordinateSources.H, "unresolved");
-    assert.equal(entry?.gridCompatibility, "unresolved");
-  }
   assert.equal(
     APPROVED_2026_FOURTH_GRADE_FORMATIONS.find(({ displayCall }) => displayCall === "Rap 4")?.coordinates.Y.r,
     1,
@@ -98,6 +92,55 @@ test("the 2026 fourth-grade curriculum activates only complete compatible calls"
     APPROVED_2026_FOURTH_GRADE_FORMATIONS.find(({ displayCall }) => displayCall === "Rock 4")?.coordinates.Y.r,
     2,
   );
+});
+
+test("Rap/Lap and Ricky/Lucky preserve base columns and apply explicit line-status overrides", () => {
+  const find = (displayCall) => {
+    const entry = APPROVED_2026_FOURTH_GRADE_FORMATIONS.find((candidate) => candidate.displayCall === displayCall);
+    assert.ok(entry, `${displayCall} must exist`);
+    return entry;
+  };
+  const columns = (entry) => Object.fromEntries(
+    Object.entries(entry.playerAlignments).map(([player, alignment]) => [player, alignment?.c ?? null]),
+  );
+
+  for (const modifier of ["4", "D"]) {
+    const rock = find(`Rock ${modifier}`);
+    const rap = find(`Rap ${modifier}`);
+    assert.deepEqual(columns(rap), columns(rock));
+    assert.equal(rap.playerAlignments.Y.lineStatus, "on-line");
+    assert.equal(rap.coordinates.Y.c, rock.coordinates.Y.c);
+    assert.equal(rap.coordinates.Y.r, 1);
+
+    const lex = find(`Lex ${modifier}`);
+    const lap = find(`Lap ${modifier}`);
+    assert.deepEqual(columns(lap), columns(lex));
+    assert.equal(lap.playerAlignments.Y.lineStatus, "on-line");
+    assert.equal(lap.coordinates.Y.c, lex.coordinates.Y.c);
+    assert.equal(lap.coordinates.Y.r, 1);
+
+    const rip = find(`Rip ${modifier}`);
+    const ricky = find(`Ricky ${modifier}`);
+    assert.deepEqual(columns(ricky), columns(rip));
+    assert.deepEqual(ricky.playerAlignments.Y, rip.playerAlignments.Y);
+    assert.equal(ricky.playerAlignments.H.lineStatus, "on-line");
+    assert.equal(ricky.playerAlignments.X.lineStatus, "off-line");
+    assert.equal(ricky.coordinates.H.r, 1);
+    assert.equal(ricky.coordinates.X.r, 2);
+
+    const liz = find(`Liz ${modifier}`);
+    const lucky = find(`Lucky ${modifier}`);
+    assert.deepEqual(columns(lucky), columns(liz));
+    assert.deepEqual(lucky.playerAlignments.Y, liz.playerAlignments.Y);
+    assert.equal(lucky.playerAlignments.H.lineStatus, "on-line");
+    assert.equal(lucky.playerAlignments.Z.lineStatus, "off-line");
+    assert.equal(lucky.coordinates.H.r, 1);
+    assert.equal(lucky.coordinates.Z.r, 2);
+  }
+
+  assert.equal(APPROVED_2026_FOURTH_GRADE_FORMATIONS.length, 22);
+  assert.ok(["Rap 4", "Rap D", "Lap 4", "Lap D", "Ricky 4", "Ricky D", "Lucky 4", "Lucky D"]
+    .every((call) => ACTIVE_2026_FORMATIONS.some(({ displayCall }) => displayCall === call)));
 });
 
 test("Ray 4 and Larry 4 are centralized, explicit trips formations with legacy aliases", () => {

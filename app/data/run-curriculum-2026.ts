@@ -107,6 +107,7 @@ function formationSupportsConcept(
   formation: FormationCurriculumEntry,
   concept: RunConcept,
 ) {
+  if (!formation.runCurriculumEligible) return false;
   const semantics = FORMATION_FAMILY_DEFINITIONS[formation.formation];
   if (concept.concept === "Outside Zone") {
     return OUTSIDE_ZONE_ALIGNMENT_TYPES.has(semantics.yAlignmentType);

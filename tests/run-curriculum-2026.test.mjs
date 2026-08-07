@@ -46,6 +46,7 @@ test("active run quizzes use corrected Ray 4 and Larry 4 formation identities", 
 });
 
 test("approved full calls use only semantic formation compatibility", () => {
+  assert.equal(APPROVED_2026_RUN_CALLS.length, 32);
   assert.ok(APPROVED_2026_RUN_CALLS.length > 0);
   assert.ok(APPROVED_2026_RUN_CALLS.every(({ formation, runConcept, displayCall }) => {
     if (runConcept.concept === "Outside Zone") {
@@ -58,7 +59,10 @@ test("approved full calls use only semantic formation compatibility", () => {
       && !/\b(\d)\s+\1\b/.test(displayCall);
   }));
   assert.ok(APPROVED_2026_RUN_CALLS.every(({ formation, runConcept }) =>
-    formation.active && runConcept.activeLevel4 && runConcept.activeLevel5
+    formation.active && formation.runCurriculumEligible && runConcept.activeLevel4 && runConcept.activeLevel5
+  ));
+  assert.ok(!APPROVED_2026_RUN_CALLS.some(({ formation }) =>
+    formation.formation === "Ricky" || formation.formation === "Lucky"
   ));
 });
 

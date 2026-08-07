@@ -19,6 +19,14 @@ export type YAlignmentType = "attached-tight-end" | "wing" | "slot" | "unknown";
 export type LineStatus = "on-line" | "off-line" | "play-dependent" | "unknown";
 export type HRelationToY = "same-side" | "opposite-side";
 export type GridCoordinate = { c: number; r: number };
+export type PlayerLineStatus = "on-line" | "off-line";
+export type PlayerAlignment = { c: number; lineStatus: PlayerLineStatus };
+export type FormationPlayerAlignments = {
+  Y: PlayerAlignment | null;
+  X: PlayerAlignment | null;
+  Z: PlayerAlignment | null;
+  H: PlayerAlignment | null;
+};
 export type FormationCoordinates = {
   Y: GridCoordinate | null;
   X: GridCoordinate | null;
@@ -60,6 +68,7 @@ export type FormationCurriculumEntry = {
   introducedAt: FormationCurriculumGrade;
   cumulativeForFourthGrade: true;
   active: boolean;
+  runCurriculumEligible: boolean;
   yAlignment: {
     side: FormationSide;
     type: YAlignmentType;
@@ -68,9 +77,10 @@ export type FormationCurriculumEntry = {
   hAlignment: {
     relationToY: HRelationToY;
     type: "slot";
-    lineStatus: "off-line" | "unknown";
+    lineStatus: PlayerLineStatus | "unknown";
   } | null;
   coordinates: FormationCoordinates;
+  playerAlignments: FormationPlayerAlignments;
   coordinateSources: Record<keyof FormationCoordinates, CoordinateSource>;
   coordinateWarnings: readonly CoordinateWarning[];
   gridCompatibility: GridCompatibility;
@@ -173,18 +183,18 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
   Ricky: {
     formation: "Ricky",
     ySide: "right",
-    yAlignmentType: "unknown",
-    yLineStatus: "unknown",
-    description: "The diagrams identify Ricky as the right-side member of the Ricky/Lucky pair; its complete Y alignment classification remains unresolved.",
-    needsReview: true,
+    yAlignmentType: "wing",
+    yLineStatus: "off-line",
+    description: "Ricky retains the Rip wing alignment. H moves on-line and X moves off-line without changing either player's horizontal column.",
+    needsReview: false,
   },
   Lucky: {
     formation: "Lucky",
     ySide: "left",
-    yAlignmentType: "unknown",
-    yLineStatus: "unknown",
-    description: "The diagrams identify Lucky as the left-side member of the Ricky/Lucky pair; its complete Y alignment classification remains unresolved.",
-    needsReview: true,
+    yAlignmentType: "wing",
+    yLineStatus: "off-line",
+    description: "Lucky retains the Liz wing alignment. H moves on-line and Z moves off-line without changing either player's horizontal column.",
+    needsReview: false,
   },
 };
 
@@ -207,25 +217,55 @@ export const H_ALIGNMENT_DEFINITIONS: Readonly<
   },
 };
 
-type DraftFamilyCoordinates = Pick<FormationCoordinates, "Y" | "X" | "Z">;
+type FamilyPlayerAlignments = Pick<FormationPlayerAlignments, "Y" | "X" | "Z">;
+
+const onLine = (c: number): PlayerAlignment => ({ c, lineStatus: "on-line" });
+const offLine = (c: number): PlayerAlignment => ({ c, lineStatus: "off-line" });
+
+function withLineStatus(
+  base: FamilyPlayerAlignments,
+  overrides: Partial<Record<keyof FamilyPlayerAlignments, PlayerLineStatus>>,
+): FamilyPlayerAlignments {
+  return Object.fromEntries(
+    (Object.keys(base) as Array<keyof FamilyPlayerAlignments>).map((player) => {
+      const alignment = base[player];
+      return [player, alignment && overrides[player]
+        ? { ...alignment, lineStatus: overrides[player] }
+        : alignment];
+    }),
+  ) as FamilyPlayerAlignments;
+}
+
+const RIGHT_ALIGNMENTS: FamilyPlayerAlignments = { Y: onLine(13), X: onLine(2), Z: offLine(18) };
+const LEFT_ALIGNMENTS: FamilyPlayerAlignments = { Y: onLine(7), X: offLine(2), Z: onLine(18) };
+const RIP_ALIGNMENTS: FamilyPlayerAlignments = { Y: offLine(13), X: onLine(2), Z: onLine(18) };
+const LIZ_ALIGNMENTS: FamilyPlayerAlignments = { Y: offLine(7), X: onLine(2), Z: onLine(18) };
+const ROCK_ALIGNMENTS: FamilyPlayerAlignments = { Y: offLine(16), X: onLine(2), Z: onLine(18) };
+const LEX_ALIGNMENTS: FamilyPlayerAlignments = { Y: offLine(4), X: onLine(2), Z: onLine(18) };
 
 // Draft 19×6 coordinates. Existing live coordinates are not changed or imported here.
-const DRAFT_FAMILY_COORDINATES: Readonly<Record<FormationCurriculumFamily, DraftFamilyCoordinates>> = {
-  Right: { Y: { c: 13, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 2 } },
-  Left: { Y: { c: 7, r: 1 }, X: { c: 2, r: 2 }, Z: { c: 18, r: 1 } },
-  Rip: { Y: { c: 13, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
-  Liz: { Y: { c: 7, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
-  Rock: { Y: { c: 16, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
-  Lex: { Y: { c: 4, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
-  Rap: { Y: { c: 16, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
-  Lap: { Y: { c: 4, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+const DRAFT_FAMILY_ALIGNMENTS: Readonly<Record<FormationCurriculumFamily, FamilyPlayerAlignments>> = {
+  Right: RIGHT_ALIGNMENTS,
+  Left: LEFT_ALIGNMENTS,
+  Rip: RIP_ALIGNMENTS,
+  Liz: LIZ_ALIGNMENTS,
+  Rock: ROCK_ALIGNMENTS,
+  Lex: LEX_ALIGNMENTS,
+  Rap: withLineStatus(ROCK_ALIGNMENTS, { Y: "on-line" }),
+  Lap: withLineStatus(LEX_ALIGNMENTS, { Y: "on-line" }),
   // Ray 4 is Right 4 with Z explicitly shifted across to the X/H side.
-  Ray: { Y: { c: 13, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 4, r: 2 } },
+  Ray: { Y: onLine(13), X: onLine(2), Z: offLine(4) },
   // Larry 4 is Left 4 with X explicitly shifted across to the Z/H side.
-  Larry: { Y: { c: 7, r: 1 }, X: { c: 16, r: 2 }, Z: { c: 18, r: 1 } },
-  Ricky: { Y: { c: 13, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
-  Lucky: { Y: { c: 7, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+  Larry: { Y: onLine(7), X: offLine(16), Z: onLine(18) },
+  Ricky: withLineStatus(RIP_ALIGNMENTS, { X: "off-line" }),
+  Lucky: withLineStatus(LIZ_ALIGNMENTS, { Z: "off-line" }),
 };
+
+function renderCoordinate(alignment: PlayerAlignment | null): GridCoordinate | null {
+  return alignment
+    ? { c: alignment.c, r: alignment.lineStatus === "on-line" ? 1 : 2 }
+    : null;
+}
 
 const LEGACY_FAMILIES = new Set<FormationCurriculumFamily>(["Right", "Left", "Rip", "Liz", "Rock", "Lex"]);
 
@@ -285,53 +325,63 @@ type CurriculumEntrySource = Pick<
   "id" | "displayCall" | "formation" | "hModifier" | "introducedAt"
 > & {
   sourceConflict?: string;
+  runCurriculumEligible?: boolean;
 };
 
 function createCurriculumEntry(source: CurriculumEntrySource): FormationCurriculumEntry {
   const family = FORMATION_FAMILY_DEFINITIONS[source.formation];
   const hDefinition = source.hModifier === null ? null : H_ALIGNMENT_DEFINITIONS[source.hModifier];
-  const familyCoordinates = DRAFT_FAMILY_COORDINATES[source.formation];
-  const diagramHasUnresolvedD =
-    (source.formation === "Ricky" || source.formation === "Lucky") && source.hModifier === "D";
-  const hCoordinate = diagramHasUnresolvedD
+  const familyAlignments = DRAFT_FAMILY_ALIGNMENTS[source.formation];
+  const hBaseCoordinate = source.hModifier === null
     ? null
-    : source.hModifier === null
-      ? null
-      : CANDIDATE_2026_H_COORDINATES[family.ySide][source.hModifier];
-  const coordinates: FormationCoordinates = { ...familyCoordinates, H: hCoordinate };
+    : CANDIDATE_2026_H_COORDINATES[family.ySide][source.hModifier];
+  const hPlayerAlignment: PlayerAlignment | null = hBaseCoordinate
+    ? {
+        c: hBaseCoordinate.c,
+        lineStatus: source.formation === "Ricky" || source.formation === "Lucky"
+          ? "on-line"
+          : "off-line",
+      }
+    : null;
+  const playerAlignments: FormationPlayerAlignments = {
+    ...familyAlignments,
+    H: hPlayerAlignment,
+  };
+  const coordinates = Object.fromEntries(
+    (Object.keys(playerAlignments) as Array<keyof FormationPlayerAlignments>)
+      .map((player) => [player, renderCoordinate(playerAlignments[player])]),
+  ) as FormationCoordinates;
   const reusedFamily = LEGACY_FAMILIES.has(source.formation);
   const coordinateSources: Record<keyof FormationCoordinates, CoordinateSource> = {
     Y: reusedFamily ? "reused-existing" : "playbook-diagram",
     X: reusedFamily ? "reused-existing" : "playbook-diagram",
     Z: reusedFamily ? "reused-existing" : "playbook-diagram",
-    H: diagramHasUnresolvedD || source.hModifier === null ? "unresolved" : "semantic-rule",
+    H: source.hModifier === null ? "unresolved" : "semantic-rule",
   };
   const coordinateWarnings = findCoordinateWarnings(coordinates);
-  const gridCompatibility: GridCompatibility = diagramHasUnresolvedD
-    ? "unresolved"
-    : coordinateWarnings.length
+  const gridCompatibility: GridCompatibility = coordinateWarnings.length
       ? "requires-adjustment"
       : reusedFamily && source.hModifier !== "4"
         ? "compatible"
         : "compatible-with-new-coordinates";
-  const compatibilityNotes = diagramHasUnresolvedD
-    ? "The diagram places H opposite Y even though the written D rule says same-side; H remains unresolved."
-    : coordinateWarnings.length
+  const compatibilityNotes = coordinateWarnings.length
         ? "The current marker geometry produces a blocking player overlap."
+        : source.formation === "Ricky" || source.formation === "Lucky"
+          ? "H is on-line while the designated outside receiver is off-line; horizontal columns match the Rip/Liz base."
         : source.hModifier === "4"
           ? "The 2026 H midpoint is one column inward from the legacy 4 target."
           : source.formation === "Rap" || source.formation === "Lap"
             ? "Row 1 preserves the on-line slot distinction from the off-line Rock/Lex row 2 alignment."
             : undefined;
   const active =
-    gridCompatibility !== "unresolved"
-    && gridCompatibility !== "requires-adjustment"
+    gridCompatibility !== "requires-adjustment"
     && coordinateWarnings.length === 0
     && Object.values(coordinates).every((coordinate) => coordinate !== null);
   return {
     ...source,
     cumulativeForFourthGrade: true,
     active,
+    runCurriculumEligible: source.runCurriculumEligible ?? true,
     yAlignment: {
       side: family.ySide,
       type: family.yAlignmentType,
@@ -341,17 +391,18 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
       ? {
           relationToY: hDefinition.relationToY,
           type: hDefinition.alignmentType,
-          lineStatus: hDefinition.lineStatus,
+          lineStatus: hPlayerAlignment?.lineStatus ?? hDefinition.lineStatus,
         }
       : null,
     coordinates,
+    playerAlignments,
     coordinateSources,
     coordinateWarnings,
     gridCompatibility,
     ...(compatibilityNotes ? { compatibilityNotes } : {}),
     ...(family.alignmentVariation ? { alignmentVariation: family.alignmentVariation } : {}),
     ...(family.otherPlayerAlignmentNote ? { otherPlayerAlignmentNote: family.otherPlayerAlignmentNote } : {}),
-    needsReview: family.needsReview || gridCompatibility === "requires-adjustment" || gridCompatibility === "unresolved",
+    needsReview: family.needsReview || gridCompatibility === "requires-adjustment",
   };
 }
 
@@ -381,10 +432,10 @@ export const APPROVED_2026_FOURTH_GRADE_FORMATIONS: readonly FormationCurriculum
   // 4th Grade
   createCurriculumEntry({ id: "ray-4", displayCall: "Ray 4", formation: "Ray", hModifier: "4", introducedAt: "4th Grade" }),
   createCurriculumEntry({ id: "larry-4", displayCall: "Larry 4", formation: "Larry", hModifier: "4", introducedAt: "4th Grade" }),
-  createCurriculumEntry({ id: "ricky-4", displayCall: "Ricky 4", formation: "Ricky", hModifier: "4", introducedAt: "4th Grade" }),
-  createCurriculumEntry({ id: "ricky-d", displayCall: "Ricky D", formation: "Ricky", hModifier: "D", introducedAt: "4th Grade" }),
-  createCurriculumEntry({ id: "lucky-4", displayCall: "Lucky 4", formation: "Lucky", hModifier: "4", introducedAt: "4th Grade" }),
-  createCurriculumEntry({ id: "lucky-d", displayCall: "Lucky D", formation: "Lucky", hModifier: "D", introducedAt: "4th Grade" }),
+  createCurriculumEntry({ id: "ricky-4", displayCall: "Ricky 4", formation: "Ricky", hModifier: "4", introducedAt: "4th Grade", runCurriculumEligible: false }),
+  createCurriculumEntry({ id: "ricky-d", displayCall: "Ricky D", formation: "Ricky", hModifier: "D", introducedAt: "4th Grade", runCurriculumEligible: false }),
+  createCurriculumEntry({ id: "lucky-4", displayCall: "Lucky 4", formation: "Lucky", hModifier: "4", introducedAt: "4th Grade", runCurriculumEligible: false }),
+  createCurriculumEntry({ id: "lucky-d", displayCall: "Lucky D", formation: "Lucky", hModifier: "D", introducedAt: "4th Grade", runCurriculumEligible: false }),
 ];
 
 export const ACTIVE_2026_FORMATIONS = APPROVED_2026_FOURTH_GRADE_FORMATIONS.filter(

@@ -66,6 +66,8 @@ test("Levels 1-3 remain connected to complete centralized formation calls", asyn
   assert.match(page, /selectedCurriculumFormation\.displayCall/);
   assert.match(page, /selectCurriculumFormation\(/);
   assert.match(page, /selectedCurriculumFormation\.coordinates\.H/);
+  assert.match(page, /playerAlignments\[marker\.label\]/);
+  assert.match(page, /data-line-status/);
   assert.match(page, /4 means opposite Y\. D means the same side as Y\./);
   assert.doesNotMatch(page, /EXCLUDED_LEVEL3_COMBINATIONS|pickWeightedModifier|pickWeightedFormation/);
 });
