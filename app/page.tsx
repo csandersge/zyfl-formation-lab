@@ -13,6 +13,7 @@ import {
   getCurriculumMasteryCategories,
   getCurriculumMasteryCategory,
   getCurriculumMasteryTarget,
+  migrateCurriculumExposure,
   selectCurriculumFormation,
 } from "./data/formation-curriculum-2026";
 import {
@@ -387,9 +388,9 @@ function readCurriculumExposure(value: unknown): Record<CurriculumLevel, Curricu
     ? value as Partial<Record<CurriculumLevel, CurriculumExposure>>
     : {};
   return {
-    1: source[1] ?? {},
-    2: source[2] ?? {},
-    3: source[3] ?? {},
+    1: migrateCurriculumExposure(source[1] ?? {}),
+    2: migrateCurriculumExposure(source[2] ?? {}),
+    3: migrateCurriculumExposure(source[3] ?? {}),
   };
 }
 

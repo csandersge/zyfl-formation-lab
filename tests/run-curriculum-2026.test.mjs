@@ -30,6 +30,21 @@ test("the 2026 run curriculum stores four explicit concepts and answers", () => 
   assert.deepEqual(RUN_LANDMARK_DIGITS, ["9", "8", "7", "6"]);
 });
 
+test("active run quizzes use corrected Ray 4 and Larry 4 formation identities", () => {
+  const rayLarryCalls = APPROVED_2026_RUN_CALLS.filter(({ formation }) =>
+    formation.formation === "Ray" || formation.formation === "Larry"
+  );
+  assert.ok(rayLarryCalls.length > 0);
+  assert.ok(rayLarryCalls.every(({ formationId, formation, displayCall }) =>
+    ["ray-4", "larry-4"].includes(formationId)
+      && ["Ray 4", "Larry 4"].includes(formation.displayCall)
+      && /^(Ray 4|Larry 4) /.test(displayCall)
+  ));
+  assert.ok(!APPROVED_2026_RUN_CALLS.some(({ formationId, formation }) =>
+    ["ray", "larry"].includes(formationId) || ["Ray", "Larry"].includes(formation.displayCall)
+  ));
+});
+
 test("approved full calls use only semantic formation compatibility", () => {
   assert.ok(APPROVED_2026_RUN_CALLS.length > 0);
   assert.ok(APPROVED_2026_RUN_CALLS.every(({ formation, runConcept, displayCall }) => {
@@ -39,7 +54,7 @@ test("approved full calls use only semantic formation compatibility", () => {
         && !/\b(\d)\s+\1\b/.test(displayCall);
     }
     return formation.yAlignment.type === "attached-tight-end"
-      && ["Right", "Left"].includes(formation.formation)
+      && ["Right", "Left", "Ray", "Larry"].includes(formation.formation)
       && !/\b(\d)\s+\1\b/.test(displayCall);
   }));
   assert.ok(APPROVED_2026_RUN_CALLS.every(({ formation, runConcept }) =>

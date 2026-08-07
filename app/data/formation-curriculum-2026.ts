@@ -157,18 +157,18 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     ySide: "right",
     yAlignmentType: "attached-tight-end",
     yLineStatus: "on-line",
-    description: "Y uses the attached tight-end alignment on the right.",
-    otherPlayerAlignmentNote: "X, Z, H, QB, and F placement requires later diagram review and must not be assumed identical to Right.",
-    needsReview: true,
+    description: "Ray 4 starts from Right 4, keeps Y attached right, and brings the backside Z across to create trips opposite Y.",
+    otherPlayerAlignmentNote: "X stays wide opposite Y; Z crosses beside X; H remains in the normal 4 alignment opposite Y.",
+    needsReview: false,
   },
   Larry: {
     formation: "Larry",
     ySide: "left",
     yAlignmentType: "attached-tight-end",
     yLineStatus: "on-line",
-    description: "Y uses the attached tight-end alignment on the left.",
-    otherPlayerAlignmentNote: "X, Z, H, QB, and F placement requires later diagram review and must not be assumed identical to Left.",
-    needsReview: true,
+    description: "Larry 4 starts from Left 4, keeps Y attached left, and brings the backside X across to create trips opposite Y.",
+    otherPlayerAlignmentNote: "Z stays wide opposite Y; X crosses beside Z; H remains in the normal 4 alignment opposite Y.",
+    needsReview: false,
   },
   Ricky: {
     formation: "Ricky",
@@ -219,8 +219,10 @@ const DRAFT_FAMILY_COORDINATES: Readonly<Record<FormationCurriculumFamily, Draft
   Lex: { Y: { c: 4, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
   Rap: { Y: { c: 16, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
   Lap: { Y: { c: 4, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
+  // Ray 4 is Right 4 with Z explicitly shifted across to the X/H side.
   Ray: { Y: { c: 13, r: 1 }, X: { c: 2, r: 1 }, Z: { c: 4, r: 2 } },
-  Larry: { Y: { c: 7, r: 1 }, X: { c: 18, r: 1 }, Z: { c: 16, r: 2 } },
+  // Larry 4 is Left 4 with X explicitly shifted across to the Z/H side.
+  Larry: { Y: { c: 7, r: 1 }, X: { c: 16, r: 2 }, Z: { c: 18, r: 1 } },
   Ricky: { Y: { c: 13, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
   Lucky: { Y: { c: 7, r: 2 }, X: { c: 2, r: 1 }, Z: { c: 18, r: 1 } },
 };
@@ -278,9 +280,6 @@ export function findCoordinateWarnings(coordinates: FormationCoordinates): Coord
   return warnings;
 }
 
-const RAY_LARRY_SOURCE_CONFLICT =
-  "Progression table lists Ray/Larry without a modifier; diagram labels may show 4. Retained progression-table wording pending implementation review.";
-
 type CurriculumEntrySource = Pick<
   FormationCurriculumEntry,
   "id" | "displayCall" | "formation" | "hModifier" | "introducedAt"
@@ -294,15 +293,10 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
   const familyCoordinates = DRAFT_FAMILY_COORDINATES[source.formation];
   const diagramHasUnresolvedD =
     (source.formation === "Ricky" || source.formation === "Lucky") && source.hModifier === "D";
-  const diagramOnlyH = source.formation === "Ray"
-    ? { c: 5, r: 2 }
-    : source.formation === "Larry"
-      ? { c: 15, r: 2 }
-      : null;
   const hCoordinate = diagramHasUnresolvedD
     ? null
     : source.hModifier === null
-      ? diagramOnlyH
+      ? null
       : CANDIDATE_2026_H_COORDINATES[family.ySide][source.hModifier];
   const coordinates: FormationCoordinates = { ...familyCoordinates, H: hCoordinate };
   const reusedFamily = LEGACY_FAMILIES.has(source.formation);
@@ -310,15 +304,10 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
     Y: reusedFamily ? "reused-existing" : "playbook-diagram",
     X: reusedFamily ? "reused-existing" : "playbook-diagram",
     Z: reusedFamily ? "reused-existing" : "playbook-diagram",
-    H: diagramHasUnresolvedD
-      ? "unresolved"
-      : source.hModifier === null
-        ? "playbook-diagram"
-        : "semantic-rule",
+    H: diagramHasUnresolvedD || source.hModifier === null ? "unresolved" : "semantic-rule",
   };
   const coordinateWarnings = findCoordinateWarnings(coordinates);
-  const sourceHasModifierConflict = source.formation === "Ray" || source.formation === "Larry";
-  const gridCompatibility: GridCompatibility = diagramHasUnresolvedD || sourceHasModifierConflict
+  const gridCompatibility: GridCompatibility = diagramHasUnresolvedD
     ? "unresolved"
     : coordinateWarnings.length
       ? "requires-adjustment"
@@ -327,9 +316,7 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
         : "compatible-with-new-coordinates";
   const compatibilityNotes = diagramHasUnresolvedD
     ? "The diagram places H opposite Y even though the written D rule says same-side; H remains unresolved."
-    : sourceHasModifierConflict
-      ? "The diagram supplies draft personnel coordinates but labels the call with 4 while the progression table omits the modifier."
-      : coordinateWarnings.length
+    : coordinateWarnings.length
         ? "The current marker geometry produces a blocking player overlap."
         : source.hModifier === "4"
           ? "The 2026 H midpoint is one column inward from the legacy 4 target."
@@ -392,8 +379,8 @@ export const APPROVED_2026_FOURTH_GRADE_FORMATIONS: readonly FormationCurriculum
   createCurriculumEntry({ id: "left-d", displayCall: "Left D", formation: "Left", hModifier: "D", introducedAt: "3rd Grade" }),
 
   // 4th Grade
-  createCurriculumEntry({ id: "ray", displayCall: "Ray", formation: "Ray", hModifier: null, introducedAt: "4th Grade", sourceConflict: RAY_LARRY_SOURCE_CONFLICT }),
-  createCurriculumEntry({ id: "larry", displayCall: "Larry", formation: "Larry", hModifier: null, introducedAt: "4th Grade", sourceConflict: RAY_LARRY_SOURCE_CONFLICT }),
+  createCurriculumEntry({ id: "ray-4", displayCall: "Ray 4", formation: "Ray", hModifier: "4", introducedAt: "4th Grade" }),
+  createCurriculumEntry({ id: "larry-4", displayCall: "Larry 4", formation: "Larry", hModifier: "4", introducedAt: "4th Grade" }),
   createCurriculumEntry({ id: "ricky-4", displayCall: "Ricky 4", formation: "Ricky", hModifier: "4", introducedAt: "4th Grade" }),
   createCurriculumEntry({ id: "ricky-d", displayCall: "Ricky D", formation: "Ricky", hModifier: "D", introducedAt: "4th Grade" }),
   createCurriculumEntry({ id: "lucky-4", displayCall: "Lucky 4", formation: "Lucky", hModifier: "4", introducedAt: "4th Grade" }),
@@ -411,6 +398,33 @@ export const ACTIVE_2026_FORMATIONS = APPROVED_2026_FOURTH_GRADE_FORMATIONS.filt
 export const EXCLUDED_2026_FORMATIONS = APPROVED_2026_FOURTH_GRADE_FORMATIONS.filter(
   (entry) => !ACTIVE_2026_FORMATIONS.includes(entry),
 );
+
+// Preserve progress written before Ray 4 and Larry 4 received their corrected names.
+export const FORMATION_ID_ALIASES: Readonly<Record<string, string>> = {
+  ray: "ray-4",
+  larry: "larry-4",
+};
+
+export const FORMATION_DISPLAY_CALL_ALIASES: Readonly<Record<string, string>> = {
+  Ray: "Ray 4",
+  Larry: "Larry 4",
+};
+
+export function resolveFormationId(value: string) {
+  return FORMATION_ID_ALIASES[value] ?? value;
+}
+
+export function resolveFormationDisplayCall(value: string) {
+  return FORMATION_DISPLAY_CALL_ALIASES[value] ?? value;
+}
+
+export function migrateCurriculumExposure(exposure: CurriculumExposure): CurriculumExposure {
+  return Object.entries(exposure).reduce<CurriculumExposure>((migrated, [id, count]) => {
+    const resolvedId = resolveFormationId(id);
+    migrated[resolvedId] = (migrated[resolvedId] ?? 0) + Math.max(0, Math.floor(count));
+    return migrated;
+  }, {});
+}
 
 export type CurriculumLevel = 1 | 2 | 3;
 export type CurriculumMastery = Record<string, number>;
@@ -528,8 +542,8 @@ export function validateApproved2026FourthGradeFormations(
   if (new Set(entries.map((entry) => entry.displayCall)).size !== entries.length) throw new Error("Formation curriculum display calls must be unique.");
   if (entries.some((entry) => !VALID_FORMATION_FAMILIES.has(entry.formation))) throw new Error("Formation curriculum contains an invalid formation family.");
   if (entries.some((entry) => !VALID_MODIFIERS.has(entry.hModifier))) throw new Error("Formation curriculum contains an invalid H modifier.");
-  if (entries.some((entry) => (entry.formation === "Ray" || entry.formation === "Larry") && entry.hModifier !== null)) {
-    throw new Error("Ray and Larry must not have H modifiers.");
+  if (entries.some((entry) => (entry.formation === "Ray" || entry.formation === "Larry") && entry.hModifier !== "4")) {
+    throw new Error("Ray and Larry must use the 4 modifier.");
   }
   if (entries.some((entry) => entry.active && (
     entry.gridCompatibility === "unresolved"
