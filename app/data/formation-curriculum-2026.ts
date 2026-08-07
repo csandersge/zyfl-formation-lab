@@ -22,6 +22,7 @@ export type FormationSide = "left" | "right";
 export type YAlignmentType = "attached-tight-end" | "wing" | "slot" | "unknown";
 export type LineStatus = "on-line" | "off-line" | "play-dependent" | "unknown";
 export type HRelationToY = "same-side" | "opposite-side";
+export type FRelationToH = "same-side" | "opposite-side";
 export type GridCoordinate = { c: number; r: number };
 export type PlayerLineStatus = "on-line" | "off-line";
 export type PlayerAlignment = {
@@ -40,11 +41,12 @@ export type FormationCoordinates = {
   X: GridCoordinate | null;
   Z: GridCoordinate | null;
   H: GridCoordinate | null;
+  F: GridCoordinate;
 };
 export type CoordinateSource = "reused-existing" | "playbook-diagram" | "semantic-rule" | "unresolved";
 export type GridCompatibility = "compatible" | "compatible-with-new-coordinates" | "requires-adjustment" | "unresolved";
 export type CoordinateWarning = {
-  players: ["Y" | "X" | "Z" | "H", "Y" | "X" | "Z" | "H"];
+  players: ["Y" | "X" | "Z" | "H" | "F", "Y" | "X" | "Z" | "H" | "F"];
   reason: string;
   severity: "blocking";
 };
@@ -55,6 +57,7 @@ export type FormationFamilyDefinition = {
   yAlignmentType: YAlignmentType;
   yLineStatus: LineStatus;
   description: string;
+  fRelationToH: FRelationToH;
   alignmentVariation?: string;
   otherPlayerAlignmentNote?: string;
   needsReview: boolean;
@@ -93,6 +96,14 @@ export type FormationCurriculumEntry = {
   } | null;
   coordinates: FormationCoordinates;
   playerAlignments: FormationPlayerAlignments;
+  fAlignment: {
+    relationToH: FRelationToH;
+    side: FormationSide;
+    horizontalLandmark: "backfield-left" | "backfield-right";
+    c: number;
+    depthRow: number;
+    lineStatus: "off-line";
+  };
   coordinateSources: Record<keyof FormationCoordinates, CoordinateSource>;
   coordinateWarnings: readonly CoordinateWarning[];
   gridCompatibility: GridCompatibility;
@@ -114,6 +125,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "attached-tight-end",
     yLineStatus: "on-line",
     description: "Y aligns on the line as an attached tight end to the right, in a three-point stance with a two-foot split from the tackle. Z is the receiver off the ball.",
+    fRelationToH: "opposite-side",
     needsReview: false,
   },
   Left: {
@@ -122,6 +134,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "attached-tight-end",
     yLineStatus: "on-line",
     description: "Y aligns on the line as an attached tight end to the left, in a three-point stance with a two-foot split from the tackle. X is the receiver off the ball.",
+    fRelationToH: "opposite-side",
     needsReview: false,
   },
   Rip: {
@@ -130,6 +143,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "wing",
     yLineStatus: "off-line",
     description: "Y aligns as a wing on the right; introductory diagrams show Y at the outside hip of the tackle.",
+    fRelationToH: "opposite-side",
     alignmentVariation: "Play-dependent wing depth and width from B gap to C gap",
     needsReview: false,
   },
@@ -139,6 +153,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "wing",
     yLineStatus: "off-line",
     description: "Y aligns as a wing on the left; introductory diagrams show Y at the outside hip of the tackle.",
+    fRelationToH: "opposite-side",
     alignmentVariation: "Play-dependent wing depth and width from B gap to C gap",
     needsReview: false,
   },
@@ -148,6 +163,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "slot",
     yLineStatus: "off-line",
     description: "Y aligns off the line in a two-point slot stance on the right, halfway between the outside receiver and the inside receiver.",
+    fRelationToH: "same-side",
     needsReview: false,
   },
   Lex: {
@@ -156,6 +172,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "slot",
     yLineStatus: "off-line",
     description: "Y aligns off the line in a two-point slot stance on the left, halfway between the outside receiver and the inside receiver.",
+    fRelationToH: "same-side",
     needsReview: false,
   },
   Rap: {
@@ -164,6 +181,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "slot",
     yLineStatus: "on-line",
     description: "Y aligns on the line in a two-point slot stance on the right, halfway between the outside receiver and the inside receiver.",
+    fRelationToH: "same-side",
     needsReview: false,
   },
   Lap: {
@@ -172,6 +190,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "slot",
     yLineStatus: "on-line",
     description: "Y aligns on the line in a two-point slot stance on the left, halfway between the outside receiver and the inside receiver.",
+    fRelationToH: "same-side",
     needsReview: false,
   },
   Ray: {
@@ -180,6 +199,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "attached-tight-end",
     yLineStatus: "on-line",
     description: "Ray 4 starts from Right 4, keeps Y attached right, and brings the backside Z across to create trips opposite Y.",
+    fRelationToH: "opposite-side",
     otherPlayerAlignmentNote: "X stays wide opposite Y; Z crosses beside X; H remains in the normal 4 alignment opposite Y.",
     needsReview: false,
   },
@@ -189,6 +209,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "attached-tight-end",
     yLineStatus: "on-line",
     description: "Larry 4 starts from Left 4, keeps Y attached left, and brings the backside X across to create trips opposite Y.",
+    fRelationToH: "opposite-side",
     otherPlayerAlignmentNote: "Z stays wide opposite Y; X crosses beside Z; H remains in the normal 4 alignment opposite Y.",
     needsReview: false,
   },
@@ -198,6 +219,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "wing",
     yLineStatus: "off-line",
     description: "Ricky retains the Rip wing alignment. H moves on-line and X moves off-line without changing either player's horizontal column.",
+    fRelationToH: "opposite-side",
     needsReview: false,
   },
   Lucky: {
@@ -206,6 +228,7 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
     yAlignmentType: "wing",
     yLineStatus: "off-line",
     description: "Lucky retains the Liz wing alignment. H moves on-line and Z moves off-line without changing either player's horizontal column.",
+    fRelationToH: "opposite-side",
     needsReview: false,
   },
 };
@@ -324,10 +347,30 @@ function renderCoordinate(alignment: PlayerAlignment | null): GridCoordinate | n
     : null;
 }
 
+export function resolveFAlignment(
+  hAlignment: PlayerAlignment,
+  relationToH: FRelationToH,
+): FormationCurriculumEntry["fAlignment"] {
+  const hSide: FormationSide = hAlignment.c < 10 ? "left" : "right";
+  const side: FormationSide = relationToH === "same-side"
+    ? hSide
+    : hSide === "left" ? "right" : "left";
+  return {
+    relationToH,
+    side,
+    horizontalLandmark: side === "left" ? "backfield-left" : "backfield-right",
+    c: side === "left" ? 9 : 11,
+    depthRow: 6,
+    lineStatus: "off-line",
+  };
+}
+
+type HResolvedCoordinates = Omit<FormationCoordinates, "F">;
+
 export type HAlignmentResolution = {
   modifier: Exclude<FormationCurriculumModifier, null>;
   playerAlignments: FormationPlayerAlignments;
-  coordinates: FormationCoordinates;
+  coordinates: HResolvedCoordinates;
   swappedReceiver: "X" | "Z" | null;
 };
 
@@ -372,7 +415,7 @@ export function resolveHFormationAlignment(
   const coordinates = Object.fromEntries(
     (Object.keys(playerAlignments) as Array<keyof FormationPlayerAlignments>)
       .map((player) => [player, renderCoordinate(playerAlignments[player])]),
-  ) as FormationCoordinates;
+  ) as HResolvedCoordinates;
   return { modifier, playerAlignments, coordinates, swappedReceiver };
 }
 
@@ -398,12 +441,21 @@ export const H_ALIGNMENT_REFERENCE_FORMATIONS = ([
 ] as const).flatMap(([formation, ySide, base]) =>
   ALL_H_ALIGNMENT_MODIFIERS.map((modifier) => {
     const resolution = resolveHFormationAlignment(base, ySide, modifier);
+    const fAlignment = resolveFAlignment(
+      resolution.playerAlignments.H!,
+      modifier === "0" ? "same-side" : "opposite-side",
+    );
     return {
       id: `${formation.toLowerCase()}-${modifier.toLowerCase()}-reference`,
       displayCall: `${formation} ${modifier}`,
       formation,
       active: false as const,
       ...resolution,
+      fAlignment,
+      coordinates: {
+        ...resolution.coordinates,
+        F: { c: fAlignment.c, r: fAlignment.depthRow },
+      },
     };
   }),
 );
@@ -482,16 +534,23 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
   if ((source.formation === "Ricky" || source.formation === "Lucky") && playerAlignments.H) {
     playerAlignments.H = { ...playerAlignments.H, depthRow: 1, lineStatus: "on-line" };
   }
-  const coordinates = Object.fromEntries(
+  if (!playerAlignments.H) throw new Error(`${source.displayCall} requires an explicit H alignment before F can be placed.`);
+  const fAlignment = resolveFAlignment(playerAlignments.H, family.fRelationToH);
+  const playerCoordinates = Object.fromEntries(
     (Object.keys(playerAlignments) as Array<keyof FormationPlayerAlignments>)
       .map((player) => [player, renderCoordinate(playerAlignments[player])]),
-  ) as FormationCoordinates;
+  ) as HResolvedCoordinates;
+  const coordinates: FormationCoordinates = {
+    ...playerCoordinates,
+    F: { c: fAlignment.c, r: fAlignment.depthRow },
+  };
   const reusedFamily = LEGACY_FAMILIES.has(source.formation);
   const coordinateSources: Record<keyof FormationCoordinates, CoordinateSource> = {
     Y: reusedFamily ? "reused-existing" : "playbook-diagram",
     X: reusedFamily ? "reused-existing" : "playbook-diagram",
     Z: reusedFamily ? "reused-existing" : "playbook-diagram",
     H: source.hModifier === null ? "unresolved" : "semantic-rule",
+    F: "semantic-rule",
   };
   const coordinateWarnings = findCoordinateWarnings(coordinates);
   const gridCompatibility: GridCompatibility = coordinateWarnings.length
@@ -531,6 +590,7 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
       : null,
     coordinates,
     playerAlignments,
+    fAlignment,
     coordinateSources,
     coordinateWarnings,
     gridCompatibility,

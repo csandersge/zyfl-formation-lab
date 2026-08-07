@@ -72,3 +72,18 @@ test("Levels 1-3 remain connected to complete centralized formation calls", asyn
   assert.match(page, /4 means opposite Y\. D means the same side as Y\./);
   assert.doesNotMatch(page, /EXCLUDED_LEVEL3_COMBINATIONS|pickWeightedModifier|pickWeightedFormation/);
 });
+
+test("gameplay renders F from explicit centralized formation data", async () => {
+  const [page, formationData] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/data/formation-curriculum-2026.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /activeFormationEntry\.coordinates\.F\.r/);
+  assert.match(page, /activeFormationEntry\.coordinates\.F\.c/);
+  assert.match(page, /activeFormationEntry\.fAlignment\.lineStatus/);
+  assert.match(page, /activeFormationEntry\.fAlignment\.relationToH/);
+  assert.doesNotMatch(page, /ball-carrier" style=\{\{ gridRow: 6, gridColumn: 10 \}\}/);
+  assert.match(formationData, /fRelationToH: "same-side"/);
+  assert.match(formationData, /modifier === "0" \? "same-side" : "opposite-side"/);
+  assert.doesNotMatch(page, /oppositeSide\(.*H|mirror\(.*H|formation.*includes\("Slot"\)/i);
+});

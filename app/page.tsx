@@ -1423,7 +1423,15 @@ export default function Home() {
                 </span>
               ))}
               {phase >= 4 && (
-                <span className="player fixed ball-carrier" style={{ gridRow: 6, gridColumn: 10 }}>
+                <span
+                  className="player fixed ball-carrier"
+                  data-line-status={activeFormationEntry.fAlignment.lineStatus}
+                  data-f-relation={activeFormationEntry.fAlignment.relationToH}
+                  style={{
+                    gridRow: activeFormationEntry.coordinates.F.r,
+                    gridColumn: activeFormationEntry.coordinates.F.c,
+                  }}
+                >
                   F<span className="football-badge" aria-label="Ball carrier">🏈</span>
                 </span>
               )}

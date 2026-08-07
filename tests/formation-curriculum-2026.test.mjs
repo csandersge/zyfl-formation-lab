@@ -17,12 +17,74 @@ import {
   getCurriculumMasteryCategory,
   getCurriculumMasteryTarget,
   migrateCurriculumExposure,
+  resolveFAlignment,
   resolveHAlignmentForFormation,
   resolveFormationDisplayCall,
   resolveFormationId,
   selectCurriculumFormation,
   validateApproved2026FourthGradeFormations,
 } from "../app/data/formation-curriculum-2026.ts";
+
+test("F alignment is explicit for active curriculum and inactive reference formations", () => {
+  const allSupported = [
+    ...APPROVED_2026_FOURTH_GRADE_FORMATIONS,
+    ...H_ALIGNMENT_REFERENCE_FORMATIONS,
+  ];
+  assert.ok(allSupported.every(({ fAlignment, coordinates }) =>
+    fAlignment
+    && coordinates.F.c === fAlignment.c
+    && coordinates.F.r === fAlignment.depthRow
+    && fAlignment.lineStatus === "off-line"
+  ));
+
+  const slotFamilies = new Set(["Rock", "Lex", "Rap", "Lap"]);
+  for (const entry of APPROVED_2026_FOURTH_GRADE_FORMATIONS) {
+    const hSide = entry.coordinates.H.c < 10 ? "left" : "right";
+    const expectedRelation = slotFamilies.has(entry.formation) ? "same-side" : "opposite-side";
+    assert.equal(entry.fAlignment.relationToH, expectedRelation, entry.displayCall);
+    assert.equal(
+      entry.fAlignment.side === hSide,
+      expectedRelation === "same-side",
+      entry.displayCall,
+    );
+  }
+
+  const zeroReferences = H_ALIGNMENT_REFERENCE_FORMATIONS.filter(({ modifier }) => modifier === "0");
+  assert.equal(zeroReferences.length, 2);
+  assert.ok(zeroReferences.every(({ active }) => active === false));
+  assert.ok(zeroReferences.every(({ fAlignment, coordinates }) => {
+    const hSide = coordinates.H.c < 10 ? "left" : "right";
+    return fAlignment.relationToH === "same-side" && fAlignment.side === hSide;
+  }));
+
+  const standardReferences = H_ALIGNMENT_REFERENCE_FORMATIONS.filter(({ modifier }) => modifier !== "0");
+  assert.ok(standardReferences.every(({ fAlignment, coordinates }) => {
+    const hSide = coordinates.H.c < 10 ? "left" : "right";
+    return fAlignment.relationToH === "opposite-side" && fAlignment.side !== hSide;
+  }));
+
+  for (const modifier of ["0", "1", "2", "3", "4", "5", "A", "B", "C", "D", "E"]) {
+    const right = H_ALIGNMENT_REFERENCE_FORMATIONS.find((entry) => entry.formation === "Right" && entry.modifier === modifier);
+    const left = H_ALIGNMENT_REFERENCE_FORMATIONS.find((entry) => entry.formation === "Left" && entry.modifier === modifier);
+    assert.equal(right.coordinates.F.c + left.coordinates.F.c, 20, `${modifier} must mirror F`);
+  }
+
+  for (const entry of allSupported) {
+    for (const player of ["Y", "X", "Z", "H"]) {
+      assert.notDeepEqual(entry.coordinates.F, entry.coordinates[player], `${entry.displayCall} F must not overlap ${player}`);
+    }
+  }
+  assert.deepEqual(resolveFAlignment({ c: 3, depthRow: 2, lineStatus: "off-line" }, "same-side"), {
+    relationToH: "same-side",
+    side: "left",
+    horizontalLandmark: "backfield-left",
+    c: 9,
+    depthRow: 6,
+    lineStatus: "off-line",
+  });
+  assert.equal(APPROVED_2026_FOURTH_GRADE_FORMATIONS.length, 22);
+  assert.equal(ACTIVE_2026_FORMATIONS.length, 20);
+});
 
 test("the 2026 fourth-grade curriculum activates only complete compatible calls", () => {
   assert.equal(validateApproved2026FourthGradeFormations(), true);
