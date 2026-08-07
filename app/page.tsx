@@ -3,17 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ACTIVE_2026_FORMATIONS,
+  ALL_H_ALIGNMENT_MODIFIERS,
   FORMATION_FAMILY_DEFINITIONS,
   type CurriculumExposure,
   type CurriculumLevel,
   type CurriculumMastery,
   type FormationCurriculumEntry,
+  type FormationCurriculumModifier,
   type GridCoordinate,
   curriculumLevelMastered,
   getCurriculumMasteryCategories,
   getCurriculumMasteryCategory,
   getCurriculumMasteryTarget,
   migrateCurriculumExposure,
+  resolveHAlignmentForFormation,
   selectCurriculumFormation,
 } from "./data/formation-curriculum-2026";
 import {
@@ -42,7 +45,7 @@ type ReceiverLabel = "Y" | "X" | "Z";
 type BallCarrier = "QB" | "F" | "H" | "Y" | "X" | "Z";
 type CarrierDigit = "1" | "2" | "4" | "5" | "6" | "7";
 type LocationDigit = "0" | "1" | "4" | "5" | "6" | "7" | "8" | "9";
-type HModifier = "A" | "B" | "C" | "D" | "1" | "2" | "3" | "4";
+type HModifier = Exclude<FormationCurriculumModifier, null>;
 type HHistory = Record<HModifier, { correct: number; incorrect: number }>;
 type CarrierHistory = Record<CarrierDigit, { correct: number; incorrect: number }>;
 type LocationHistory = Record<LocationDigit, { correct: number; incorrect: number }>;
@@ -72,7 +75,7 @@ type ApprovedRunPlay = {
 const FORMATION_NAMES: FormationName[] = ["Right", "Rip", "Rock", "Left", "Liz", "Lex"];
 const EMPTY_MASTERY: Mastery = { Right: 0, Rip: 0, Rock: 0, Left: 0, Liz: 0, Lex: 0 };
 const EMPTY_CARD_STATE: CardState = { phase1: false, phase2: false, phase3: false, phase4: false, phase5: false };
-const H_MODIFIERS: HModifier[] = ["A", "B", "C", "D", "1", "2", "3", "4"];
+const H_MODIFIERS: HModifier[] = [...ALL_H_ALIGNMENT_MODIFIERS];
 const CARRIER_DIGITS: CarrierDigit[] = ["1", "2", "4", "5", "6", "7"];
 const LOCATION_DIGITS: LocationDigit[] = ["0", "1", "4", "5", "6", "7", "8", "9"];
 const BALL_CARRIERS: BallCarrier[] = ["QB", "F", "H", "Y", "X", "Z"];
@@ -139,15 +142,6 @@ const EMPTY_CARRIER_HISTORY: CarrierHistory = Object.fromEntries(
 const EMPTY_LOCATION_HISTORY: LocationHistory = Object.fromEntries(
   LOCATION_DIGITS.map((digit) => [digit, { correct: 0, incorrect: 0 }]),
 ) as LocationHistory;
-const NUMBER_H_SPOTS: Record<"1" | "2" | "3" | "4", HSpot> = {
-  "1": { c: 9, r: 5 }, "2": { c: 8.5, r: 2 }, "3": { c: 7.5, r: 2 }, "4": { c: 4, r: 2 },
-};
-const LETTER_H_SPOTS: Record<"A" | "B" | "C" | "D", HSpot> = {
-  A: { c: 11, r: 5 }, B: { c: 11.5, r: 2 }, C: { c: 12.5, r: 2 }, D: { c: 16, r: 2 },
-};
-const LETTER_FOR_NUMBER = { "1": "A", "2": "B", "3": "C", "4": "D" } as const;
-const NUMBER_FOR_LETTER = { A: "1", B: "2", C: "3", D: "4" } as const;
-
 const FORMATIONS: Record<FormationName, {
   players: Record<ReceiverLabel, Cell>;
   explanation: string;
@@ -436,21 +430,10 @@ function readCardState(value: unknown): CardState {
   return Object.fromEntries(CARD_KEYS.map((key) => [key, Boolean(source[key])])) as CardState;
 }
 
-function yIsRight(formation: FormationName) {
-  return formation === "Right" || formation === "Rip" || formation === "Rock";
-}
-
 function getHSpot(formation: FormationName, modifier: HModifier): HSpot {
-  const rightY = yIsRight(formation);
-  const isLetter = modifier >= "A" && modifier <= "D";
-  if (isLetter) {
-    return rightY
-      ? LETTER_H_SPOTS[modifier as keyof typeof LETTER_H_SPOTS]
-      : NUMBER_H_SPOTS[NUMBER_FOR_LETTER[modifier as keyof typeof NUMBER_FOR_LETTER]];
-  }
-  return rightY
-    ? NUMBER_H_SPOTS[modifier as keyof typeof NUMBER_H_SPOTS]
-    : LETTER_H_SPOTS[LETTER_FOR_NUMBER[modifier as keyof typeof LETTER_FOR_NUMBER]];
+  const coordinate = resolveHAlignmentForFormation(formation, modifier).coordinates.H;
+  if (!coordinate) throw new Error(`${formation} ${modifier} does not resolve an H position.`);
+  return coordinate;
 }
 
 function hTargetsForFormation(formation: FormationName) {

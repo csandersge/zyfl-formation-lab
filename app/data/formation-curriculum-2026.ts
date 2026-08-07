@@ -12,7 +12,11 @@ export type FormationCurriculumFamily =
   | "Ricky"
   | "Lucky";
 
-export type FormationCurriculumModifier = "4" | "D" | null;
+export type FormationCurriculumModifier =
+  | "0"
+  | "1" | "2" | "3" | "4" | "5"
+  | "A" | "B" | "C" | "D" | "E"
+  | null;
 export type FormationCurriculumGrade = "Flag" | "3rd Grade" | "4th Grade";
 export type FormationSide = "left" | "right";
 export type YAlignmentType = "attached-tight-end" | "wing" | "slot" | "unknown";
@@ -20,7 +24,11 @@ export type LineStatus = "on-line" | "off-line" | "play-dependent" | "unknown";
 export type HRelationToY = "same-side" | "opposite-side";
 export type GridCoordinate = { c: number; r: number };
 export type PlayerLineStatus = "on-line" | "off-line";
-export type PlayerAlignment = { c: number; lineStatus: PlayerLineStatus };
+export type PlayerAlignment = {
+  c: number;
+  depthRow: number;
+  lineStatus: PlayerLineStatus;
+};
 export type FormationPlayerAlignments = {
   Y: PlayerAlignment | null;
   X: PlayerAlignment | null;
@@ -54,9 +62,13 @@ export type FormationFamilyDefinition = {
 
 export type HAlignmentDefinition = {
   modifier: Exclude<FormationCurriculumModifier, null>;
-  relationToY: HRelationToY;
-  alignmentType: "slot";
-  lineStatus: "off-line" | "unknown";
+  kind: "ladder" | "role-swap";
+  relationToY: HRelationToY | "receiver-dependent";
+  landmark: "base-tailback" | "b-gap" | "wing" | "inside-slot" | "outside-receiver" | "receiver-swap";
+  depthRow: number | "receiver-dependent";
+  lineStatus: PlayerLineStatus | "receiver-dependent";
+  coordinatesByYSide: Readonly<Record<FormationSide, GridCoordinate>> | null;
+  pairedWith: Exclude<FormationCurriculumModifier, null> | null;
   description: string;
 };
 
@@ -75,9 +87,9 @@ export type FormationCurriculumEntry = {
     lineStatus: LineStatus;
   };
   hAlignment: {
-    relationToY: HRelationToY;
-    type: "slot";
-    lineStatus: PlayerLineStatus | "unknown";
+    relationToY: HAlignmentDefinition["relationToY"];
+    type: HAlignmentDefinition["landmark"];
+    lineStatus: PlayerLineStatus | "receiver-dependent" | "unknown";
   } | null;
   coordinates: FormationCoordinates;
   playerAlignments: FormationPlayerAlignments;
@@ -201,26 +213,67 @@ export const FORMATION_FAMILY_DEFINITIONS: Readonly<
 export const H_ALIGNMENT_DEFINITIONS: Readonly<
   Record<Exclude<FormationCurriculumModifier, null>, HAlignmentDefinition>
 > = {
+  "0": {
+    modifier: "0", kind: "role-swap", relationToY: "receiver-dependent", landmark: "receiver-swap",
+    depthRow: "receiver-dependent", lineStatus: "receiver-dependent", coordinatesByYSide: null, pairedWith: null,
+    description: "H becomes the single receiver; the displaced X or Z assumes H's base-tailback role.",
+  },
+  "1": {
+    modifier: "1", kind: "ladder", relationToY: "opposite-side", landmark: "base-tailback",
+    depthRow: 5, lineStatus: "off-line", coordinatesByYSide: { right: { c: 9, r: 5 }, left: { c: 11, r: 5 } }, pairedWith: "A",
+    description: "H aligns in the base-tailback position opposite Y.",
+  },
+  "2": {
+    modifier: "2", kind: "ladder", relationToY: "opposite-side", landmark: "b-gap",
+    depthRow: 2, lineStatus: "off-line", coordinatesByYSide: { right: { c: 8.5, r: 2 }, left: { c: 11.5, r: 2 } }, pairedWith: "B",
+    description: "H aligns in the B-gap area opposite Y.",
+  },
+  "3": {
+    modifier: "3", kind: "ladder", relationToY: "opposite-side", landmark: "wing",
+    depthRow: 2, lineStatus: "off-line", coordinatesByYSide: { right: { c: 7.5, r: 2 }, left: { c: 12.5, r: 2 } }, pairedWith: "C",
+    description: "H aligns as a wing opposite Y.",
+  },
   "4": {
-    modifier: "4",
-    relationToY: "opposite-side",
-    alignmentType: "slot",
-    lineStatus: "off-line",
+    modifier: "4", kind: "ladder", relationToY: "opposite-side", landmark: "inside-slot",
+    depthRow: 2, lineStatus: "off-line", coordinatesByYSide: { right: { c: 5, r: 2 }, left: { c: 15, r: 2 } }, pairedWith: "D",
     description: "H aligns opposite Y, halfway between the outside receiver and the tackle.",
   },
+  "5": {
+    modifier: "5", kind: "ladder", relationToY: "opposite-side", landmark: "outside-receiver",
+    depthRow: 2, lineStatus: "off-line", coordinatesByYSide: { right: { c: 3, r: 2 }, left: { c: 17, r: 2 } }, pairedWith: "E",
+    description: "H aligns as an outside receiver near the numbers opposite Y.",
+  },
+  A: {
+    modifier: "A", kind: "ladder", relationToY: "same-side", landmark: "base-tailback",
+    depthRow: 5, lineStatus: "off-line", coordinatesByYSide: { right: { c: 11, r: 5 }, left: { c: 9, r: 5 } }, pairedWith: "1",
+    description: "H aligns in the base-tailback position on Y's side.",
+  },
+  B: {
+    modifier: "B", kind: "ladder", relationToY: "same-side", landmark: "b-gap",
+    depthRow: 2, lineStatus: "off-line", coordinatesByYSide: { right: { c: 11.5, r: 2 }, left: { c: 8.5, r: 2 } }, pairedWith: "2",
+    description: "H aligns in the B-gap area on Y's side.",
+  },
+  C: {
+    modifier: "C", kind: "ladder", relationToY: "same-side", landmark: "wing",
+    depthRow: 2, lineStatus: "off-line", coordinatesByYSide: { right: { c: 12.5, r: 2 }, left: { c: 7.5, r: 2 } }, pairedWith: "3",
+    description: "H aligns as a wing on Y's side.",
+  },
   D: {
-    modifier: "D",
-    relationToY: "same-side",
-    alignmentType: "slot",
-    lineStatus: "off-line",
+    modifier: "D", kind: "ladder", relationToY: "same-side", landmark: "inside-slot",
+    depthRow: 2, lineStatus: "off-line", coordinatesByYSide: { right: { c: 16, r: 2 }, left: { c: 4, r: 2 } }, pairedWith: "4",
     description: "H aligns on the Y side, halfway between the middle receiver and the tackle.",
+  },
+  E: {
+    modifier: "E", kind: "ladder", relationToY: "same-side", landmark: "outside-receiver",
+    depthRow: 2, lineStatus: "off-line", coordinatesByYSide: { right: { c: 17, r: 2 }, left: { c: 3, r: 2 } }, pairedWith: "5",
+    description: "H aligns as an outside receiver near the numbers on Y's side.",
   },
 };
 
 type FamilyPlayerAlignments = Pick<FormationPlayerAlignments, "Y" | "X" | "Z">;
 
-const onLine = (c: number): PlayerAlignment => ({ c, lineStatus: "on-line" });
-const offLine = (c: number): PlayerAlignment => ({ c, lineStatus: "off-line" });
+const onLine = (c: number): PlayerAlignment => ({ c, depthRow: 1, lineStatus: "on-line" });
+const offLine = (c: number): PlayerAlignment => ({ c, depthRow: 2, lineStatus: "off-line" });
 
 function withLineStatus(
   base: FamilyPlayerAlignments,
@@ -230,7 +283,11 @@ function withLineStatus(
     (Object.keys(base) as Array<keyof FamilyPlayerAlignments>).map((player) => {
       const alignment = base[player];
       return [player, alignment && overrides[player]
-        ? { ...alignment, lineStatus: overrides[player] }
+        ? {
+            ...alignment,
+            depthRow: overrides[player] === "on-line" ? 1 : 2,
+            lineStatus: overrides[player],
+          }
         : alignment];
     }),
   ) as FamilyPlayerAlignments;
@@ -263,9 +320,93 @@ const DRAFT_FAMILY_ALIGNMENTS: Readonly<Record<FormationCurriculumFamily, Family
 
 function renderCoordinate(alignment: PlayerAlignment | null): GridCoordinate | null {
   return alignment
-    ? { c: alignment.c, r: alignment.lineStatus === "on-line" ? 1 : 2 }
+    ? { c: alignment.c, r: alignment.depthRow }
     : null;
 }
+
+export type HAlignmentResolution = {
+  modifier: Exclude<FormationCurriculumModifier, null>;
+  playerAlignments: FormationPlayerAlignments;
+  coordinates: FormationCoordinates;
+  swappedReceiver: "X" | "Z" | null;
+};
+
+export function resolveHFormationAlignment(
+  base: FamilyPlayerAlignments,
+  ySide: FormationSide,
+  modifier: Exclude<FormationCurriculumModifier, null>,
+): HAlignmentResolution {
+  const definition = H_ALIGNMENT_DEFINITIONS[modifier];
+  let playerAlignments: FormationPlayerAlignments;
+  let swappedReceiver: "X" | "Z" | null = null;
+
+  if (modifier === "0") {
+    swappedReceiver = ySide === "right" ? "X" : "Z";
+    const receiverAlignment = base[swappedReceiver];
+    const tailbackCoordinate = H_ALIGNMENT_DEFINITIONS["1"].coordinatesByYSide?.[ySide];
+    if (!receiverAlignment || !tailbackCoordinate) throw new Error("The 0 alignment requires an outside receiver and base-tailback landmark.");
+    playerAlignments = {
+      ...base,
+      H: { ...receiverAlignment },
+      [swappedReceiver]: {
+        c: tailbackCoordinate.c,
+        depthRow: tailbackCoordinate.r,
+        lineStatus: "off-line",
+      },
+    };
+  } else {
+    const coordinate = definition.coordinatesByYSide?.[ySide];
+    if (!coordinate || definition.lineStatus === "receiver-dependent") {
+      throw new Error(`${modifier} is missing explicit H alignment metadata.`);
+    }
+    playerAlignments = {
+      ...base,
+      H: {
+        c: coordinate.c,
+        depthRow: coordinate.r,
+        lineStatus: definition.lineStatus,
+      },
+    };
+  }
+
+  const coordinates = Object.fromEntries(
+    (Object.keys(playerAlignments) as Array<keyof FormationPlayerAlignments>)
+      .map((player) => [player, renderCoordinate(playerAlignments[player])]),
+  ) as FormationCoordinates;
+  return { modifier, playerAlignments, coordinates, swappedReceiver };
+}
+
+export function resolveHAlignmentForFormation(
+  formation: FormationCurriculumFamily,
+  modifier: Exclude<FormationCurriculumModifier, null>,
+) {
+  return resolveHFormationAlignment(
+    DRAFT_FAMILY_ALIGNMENTS[formation],
+    FORMATION_FAMILY_DEFINITIONS[formation].ySide,
+    modifier,
+  );
+}
+
+export const ALL_H_ALIGNMENT_MODIFIERS = [
+  "1", "2", "3", "4", "5", "A", "B", "C", "D", "E", "0",
+] as const satisfies readonly Exclude<FormationCurriculumModifier, null>[];
+
+// Inactive reference records support future curricula without changing the active fourth-grade list.
+export const H_ALIGNMENT_REFERENCE_FORMATIONS = ([
+  ["Right", "right", RIGHT_ALIGNMENTS],
+  ["Left", "left", LEFT_ALIGNMENTS],
+] as const).flatMap(([formation, ySide, base]) =>
+  ALL_H_ALIGNMENT_MODIFIERS.map((modifier) => {
+    const resolution = resolveHFormationAlignment(base, ySide, modifier);
+    return {
+      id: `${formation.toLowerCase()}-${modifier.toLowerCase()}-reference`,
+      displayCall: `${formation} ${modifier}`,
+      formation,
+      active: false as const,
+      ...resolution,
+    };
+  }),
+);
 
 const LEGACY_FAMILIES = new Set<FormationCurriculumFamily>(["Right", "Left", "Rip", "Liz", "Rock", "Lex"]);
 
@@ -332,21 +473,15 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
   const family = FORMATION_FAMILY_DEFINITIONS[source.formation];
   const hDefinition = source.hModifier === null ? null : H_ALIGNMENT_DEFINITIONS[source.hModifier];
   const familyAlignments = DRAFT_FAMILY_ALIGNMENTS[source.formation];
-  const hBaseCoordinate = source.hModifier === null
+  const resolvedAlignment = source.hModifier === null
     ? null
-    : CANDIDATE_2026_H_COORDINATES[family.ySide][source.hModifier];
-  const hPlayerAlignment: PlayerAlignment | null = hBaseCoordinate
-    ? {
-        c: hBaseCoordinate.c,
-        lineStatus: source.formation === "Ricky" || source.formation === "Lucky"
-          ? "on-line"
-          : "off-line",
-      }
-    : null;
-  const playerAlignments: FormationPlayerAlignments = {
-    ...familyAlignments,
-    H: hPlayerAlignment,
-  };
+    : resolveHFormationAlignment(familyAlignments, family.ySide, source.hModifier);
+  const playerAlignments: FormationPlayerAlignments = resolvedAlignment
+    ? { ...resolvedAlignment.playerAlignments }
+    : { ...familyAlignments, H: null };
+  if ((source.formation === "Ricky" || source.formation === "Lucky") && playerAlignments.H) {
+    playerAlignments.H = { ...playerAlignments.H, depthRow: 1, lineStatus: "on-line" };
+  }
   const coordinates = Object.fromEntries(
     (Object.keys(playerAlignments) as Array<keyof FormationPlayerAlignments>)
       .map((player) => [player, renderCoordinate(playerAlignments[player])]),
@@ -390,8 +525,8 @@ function createCurriculumEntry(source: CurriculumEntrySource): FormationCurricul
     hAlignment: hDefinition
       ? {
           relationToY: hDefinition.relationToY,
-          type: hDefinition.alignmentType,
-          lineStatus: hPlayerAlignment?.lineStatus ?? hDefinition.lineStatus,
+          type: hDefinition.landmark,
+          lineStatus: playerAlignments.H?.lineStatus ?? hDefinition.lineStatus,
         }
       : null,
     coordinates,
@@ -583,7 +718,10 @@ export const FORMATION_GRID_COMPATIBILITY_REPORT = {
 const VALID_FORMATION_FAMILIES: ReadonlySet<FormationCurriculumFamily> = new Set(
   Object.keys(FORMATION_FAMILY_DEFINITIONS) as FormationCurriculumFamily[],
 );
-const VALID_MODIFIERS: ReadonlySet<FormationCurriculumModifier> = new Set(["4", "D", null]);
+const VALID_MODIFIERS: ReadonlySet<FormationCurriculumModifier> = new Set([
+  ...ALL_H_ALIGNMENT_MODIFIERS,
+  null,
+]);
 
 export function validateApproved2026FourthGradeFormations(
   entries: readonly FormationCurriculumEntry[] = APPROVED_2026_FOURTH_GRADE_FORMATIONS,

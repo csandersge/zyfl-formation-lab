@@ -8,6 +8,7 @@ import {
   FORMATION_FAMILY_DEFINITIONS,
   FORMATION_GRID_COMPATIBILITY_REPORT,
   H_ALIGNMENT_DEFINITIONS,
+  H_ALIGNMENT_REFERENCE_FORMATIONS,
   H_COORDINATE_COMPATIBILITY_REPORT,
   FORMATION_DISPLAY_CALL_ALIASES,
   FORMATION_ID_ALIASES,
@@ -16,6 +17,7 @@ import {
   getCurriculumMasteryCategory,
   getCurriculumMasteryTarget,
   migrateCurriculumExposure,
+  resolveHAlignmentForFormation,
   resolveFormationDisplayCall,
   resolveFormationId,
   selectCurriculumFormation,
@@ -54,13 +56,9 @@ test("the 2026 fourth-grade curriculum activates only complete compatible calls"
       coordinate === null || (coordinate.c >= 1 && coordinate.c <= 19 && coordinate.r >= 1 && coordinate.r <= 6)
     )
   ));
-  assert.deepEqual(H_ALIGNMENT_DEFINITIONS["4"], {
-    modifier: "4",
-    relationToY: "opposite-side",
-    alignmentType: "slot",
-    lineStatus: "off-line",
-    description: "H aligns opposite Y, halfway between the outside receiver and the tackle.",
-  });
+  assert.equal(H_ALIGNMENT_DEFINITIONS["4"].relationToY, "opposite-side");
+  assert.equal(H_ALIGNMENT_DEFINITIONS["4"].landmark, "inside-slot");
+  assert.equal(H_ALIGNMENT_DEFINITIONS["4"].lineStatus, "off-line");
   assert.equal(H_ALIGNMENT_DEFINITIONS.D.relationToY, "same-side");
   assert.equal(FORMATION_FAMILY_DEFINITIONS.Rap.yLineStatus, "on-line");
   assert.equal(FORMATION_FAMILY_DEFINITIONS.Rock.yLineStatus, "off-line");
@@ -92,6 +90,58 @@ test("the 2026 fourth-grade curriculum activates only complete compatible calls"
     APPROVED_2026_FOURTH_GRADE_FORMATIONS.find(({ displayCall }) => displayCall === "Rock 4")?.coordinates.Y.r,
     2,
   );
+});
+
+test("the complete H ladder mirrors sides and keeps special 0 as an explicit role swap", () => {
+  const numeric = ["1", "2", "3", "4", "5"];
+  const letters = ["A", "B", "C", "D", "E"];
+  const pairs = [["1", "A"], ["2", "B"], ["3", "C"], ["4", "D"], ["5", "E"]];
+
+  for (const formation of ["Right", "Rip", "Rock"]) {
+    assert.ok(numeric.every((modifier) => resolveHAlignmentForFormation(formation, modifier).coordinates.H.c < 10));
+    assert.ok(letters.every((modifier) => resolveHAlignmentForFormation(formation, modifier).coordinates.H.c > 10));
+  }
+  for (const formation of ["Left", "Liz", "Lex"]) {
+    assert.ok(numeric.every((modifier) => resolveHAlignmentForFormation(formation, modifier).coordinates.H.c > 10));
+    assert.ok(letters.every((modifier) => resolveHAlignmentForFormation(formation, modifier).coordinates.H.c < 10));
+  }
+
+  for (const [number, letter] of pairs) {
+    assert.equal(H_ALIGNMENT_DEFINITIONS[number].pairedWith, letter);
+    assert.equal(H_ALIGNMENT_DEFINITIONS[letter].pairedWith, number);
+    assert.equal(H_ALIGNMENT_DEFINITIONS[number].landmark, H_ALIGNMENT_DEFINITIONS[letter].landmark);
+    assert.equal(H_ALIGNMENT_DEFINITIONS[number].depthRow, H_ALIGNMENT_DEFINITIONS[letter].depthRow);
+  }
+
+  for (const modifier of ["5", "E"]) {
+    for (const formation of ["Right", "Left"]) {
+      const h = resolveHAlignmentForFormation(formation, modifier).coordinates.H;
+      assert.ok(h.c <= 3 || h.c >= 17);
+      assert.equal(H_ALIGNMENT_DEFINITIONS[modifier].landmark, "outside-receiver");
+    }
+  }
+
+  const rightZero = resolveHAlignmentForFormation("Right", "0");
+  assert.equal(rightZero.swappedReceiver, "X");
+  assert.deepEqual(rightZero.playerAlignments.H, { c: 2, depthRow: 1, lineStatus: "on-line" });
+  assert.deepEqual(rightZero.coordinates.X, { c: 9, r: 5 });
+  assert.notDeepEqual(rightZero.coordinates.H, resolveHAlignmentForFormation("Right", "5").coordinates.H);
+
+  const leftZero = resolveHAlignmentForFormation("Left", "0");
+  assert.equal(leftZero.swappedReceiver, "Z");
+  assert.deepEqual(leftZero.playerAlignments.H, { c: 18, depthRow: 1, lineStatus: "on-line" });
+  assert.deepEqual(leftZero.coordinates.Z, { c: 11, r: 5 });
+  assert.notDeepEqual(leftZero.coordinates.H, resolveHAlignmentForFormation("Left", "5").coordinates.H);
+
+  assert.equal(H_ALIGNMENT_REFERENCE_FORMATIONS.length, 22);
+  assert.ok(H_ALIGNMENT_REFERENCE_FORMATIONS.every(({ active }) => active === false));
+  assert.ok(H_ALIGNMENT_REFERENCE_FORMATIONS.every(({ coordinates }) => {
+    const occupied = Object.values(coordinates).filter(Boolean).map(({ c, r }) => `${c}-${r}`);
+    return new Set(occupied).size === occupied.length;
+  }));
+  assert.equal(APPROVED_2026_FOURTH_GRADE_FORMATIONS.length, 22);
+  assert.equal(ACTIVE_2026_FORMATIONS.length, 20);
+  assert.ok(!ACTIVE_2026_FORMATIONS.some(({ hModifier }) => ["0", "5", "E"].includes(hModifier)));
 });
 
 test("Rap/Lap and Ricky/Lucky preserve base columns and apply explicit line-status overrides", () => {
